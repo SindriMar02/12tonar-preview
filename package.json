@@ -1,0 +1,11 @@
+{
+  "name": "12tonar-preview",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "assets": "python3 tools/assets.py",
+    "build": "node src/build.mjs",
+    "serve": "node server.mjs",
+    "qa": "node qa/qa.mjs"
+  }
+}

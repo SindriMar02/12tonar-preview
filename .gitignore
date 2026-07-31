@@ -1,0 +1,18 @@
+node_modules/
+dist/
+
+# The commercial read and the internal handoff notes. This repo is PUBLIC, because
+# GitHub Pages needs it to be, and a public repo carrying "can they afford us" under
+# the client's own name is not something they should ever be able to find.
+_internal/
+
+# 345 downloaded sleeves, ~25 MB. Regenerate with `python3 tools/fetch.py`; the
+# harvest they come from (research/p1.json, p2.json) IS tracked.
+research/covers/
+
+# Screenshot walks and probe output
+qa/walk*/
+qa/report.json
+qa/_*.mjs
+qa/_mark.png
+.DS_Store
