@@ -41,7 +41,7 @@ function crateCards() {
           <figcaption>
             <p class="t12-card-a">${esc(r.artist)}</p>
             <p class="t12-card-t">${esc(r.title)}</p>
-            <p class="t12-card-m"><span>${esc(FMT[r.fmt] || r.fmt || 'Plata')}</span><span class="t12-card-p">${isk(r.price)} kr.</span></p>
+            <p class="t12-card-m"><span>${esc(FMT[r.fmt] || r.fmt || 'Plata')}</span> <span class="t12-card-p">${isk(r.price)} kr.</span></p>
           </figcaption>
         </figure>
       </li>`;
@@ -53,13 +53,13 @@ function tileGrid() {
   return CAT.tiles.map((r) => `<li class="t12-tile">
       <img src="${esc(r.file)}" width="${r.ow}" height="${r.oh}" loading="lazy" decoding="async"
            alt="Plötuumslag: ${esc(r.artist || 'Ýmsir')}, ${esc(r.title)}">
-      <span class="t12-tile-cap"><b>${esc(r.artist || 'Ýmsir')}</b>${esc(r.title)}</span>
+      <span class="t12-tile-cap"><b>${esc(r.artist || 'Ýmsir')}</b> ${esc(r.title)}</span>
     </li>`).join('');
 }
 
 /* ------------------------------------------------------------------- pieces ------- */
 const tone = (n, k) =>
-  `<p class="t12-tone"><span class="t12-tone-n">${n}</span><span class="t12-tone-k">${esc(k)}</span></p>`;
+  `<p class="t12-tone"><span class="t12-tone-n">${n}</span> <span class="t12-tone-k">${esc(k)}</span></p>`;
 
 /* data-rv drives the per-line rise from the heading itself; the heading's own box is
    pinned by CSS so the motion lives only on the clipped lines inside it. */
@@ -68,7 +68,7 @@ const head = (t, cls = '') =>
 
 const hoursRows = () => C.HOURS.map((h) => {
   const t = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  return `<tr data-day="${h.i}"><th scope="row">${esc(h.d)}</th><td>${t(h.o)}<span class="t12-dash">til</span>${t(h.c)}</td></tr>`;
+  return `<tr data-day="${h.i}"><th scope="row">${esc(h.d)}</th><td>${t(h.o)} <span class="t12-dash">til</span> ${t(h.c)}</td></tr>`;
 }).join('');
 
 const S = CAT.stats;
@@ -209,7 +209,7 @@ export function render({ noindex = false, previewOrigin = '' } = {}) {
         ${C.STORY.body.map((p) => `<p class="t12-p" data-rv>${esc(p)}</p>`).join('')}
       </div>
       <ul class="t12-marks">
-        ${C.STORY.marks.map((m, i) => `<li data-rv style="--i:${i}"><b>${esc(m.n)}</b><span>${esc(m.t)}</span></li>`).join('')}
+        ${C.STORY.marks.map((m, i) => `<li data-rv style="--i:${i}"><b>${esc(m.n)}</b> <span>${esc(m.t)}</span></li>`).join('')}
       </ul>
     </div>
   </section>
@@ -240,7 +240,7 @@ export function render({ noindex = false, previewOrigin = '' } = {}) {
         ${head(C.LISTEN.head)}
         ${C.LISTEN.body.map((p) => `<p class="t12-p" data-rv>${esc(p)}</p>`).join('')}
         <dl class="t12-specs" data-rv>
-          ${C.LISTEN.specs.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
+          ${C.LISTEN.specs.map(([k, v]) => `<div><dt>${esc(k)}</dt> <dd>${esc(v)}</dd></div>`).join('')}
         </dl>
       </div>
       <figure class="t12-listen-f" data-rv>
@@ -282,12 +282,12 @@ export function render({ noindex = false, previewOrigin = '' } = {}) {
       ${tone(C.NUMBERS.tone, C.NUMBERS.kicker)}
       ${head(C.NUMBERS.head)}
       <ul class="t12-numgrid">
-        <li data-rv style="--i:0"><b>${isk(S.vinyl)}</b><span>plötur á vínyl</span></li>
-        <li data-rv style="--i:1"><b>${isk(S.cd)}</b><span>geisladiskar</span></li>
-        <li data-rv style="--i:2"><b>${isk(S.artists)}</b><span>flytjendur í rekkunum</span></li>
-        <li data-rv style="--i:3"><b>${isk(S.available)}</b><span>titlar til á lager</span></li>
-        <li data-rv style="--i:4"><b>${isk(S.price_med)} kr.</b><span>miðverð á plötu</span></li>
-        <li class="t12-num--range" data-rv style="--i:5"><b>${isk(S.price_min)}<span class="t12-to">til</span>${isk(S.price_max)}</b><span>verðbil í krónum</span></li>
+        <li data-rv style="--i:0"><b>${isk(S.vinyl)}</b> <span>plötur á vínyl</span></li>
+        <li data-rv style="--i:1"><b>${isk(S.cd)}</b> <span>geisladiskar</span></li>
+        <li data-rv style="--i:2"><b>${isk(S.artists)}</b> <span>flytjendur í rekkunum</span></li>
+        <li data-rv style="--i:3"><b>${isk(S.available)}</b> <span>titlar til á lager</span></li>
+        <li data-rv style="--i:4"><b>${isk(S.price_med)} kr.</b> <span>miðverð á plötu</span></li>
+        <li class="t12-num--range" data-rv style="--i:5"><b>${isk(S.price_min)} <span class="t12-to">til</span> ${isk(S.price_max)}</b> <span>verðbil í krónum</span></li>
       </ul>
       <p class="t12-note" data-rv>${esc(C.NUMBERS.note)}</p>
     </div>

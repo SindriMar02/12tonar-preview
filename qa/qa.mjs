@@ -85,6 +85,22 @@ const walkPage = async (p) => {
       imgs: imgs.length, noAlt, broken, dashes,
       worstUp: up.slice(0, 3),
       headings: [...document.querySelectorAll('.t12-h2')].map((h) => h.textContent.replace(/\s+/g, ' ').trim()),
+      /* Two block-level siblings render on separate lines but their text runs
+         together in textContent and in the accessible name, so "2.500" + "til" +
+         "9.000" is read aloud as "2.500til9.000". A collapsing whitespace text node
+         between them is invisible on screen and correct to a screen reader. */
+      runOn: [...document.querySelectorAll('.t12-numgrid li, .t12-marks li, .t12-tone, .t12-card-m, .t12-tile-cap, .t12-specs div, .t12-num--range b')]
+        .filter((el) => {
+          const kids = [...el.childNodes];
+          for (let i = 1; i < kids.length; i++) {
+            const a = kids[i - 1]; const b2 = kids[i];
+            if (a.nodeType === 1 && b2.nodeType === 1) return true;
+            if (a.nodeType === 1 && b2.nodeType === 3 && b2.textContent && !/^\s/.test(b2.textContent)) return true;
+            if (a.nodeType === 3 && b2.nodeType === 1 && a.textContent && !/\s$/.test(a.textContent)) return true;
+          }
+          return false;
+        })
+        .map((el) => (el.className || el.tagName) + ': ' + el.textContent.replace(/\s+/g, ' ').trim().slice(0, 40)),
       grids: document.querySelectorAll('.t12-grid').length,
       lang: document.documentElement.lang,
       title: document.title,
@@ -98,6 +114,7 @@ const walkPage = async (p) => {
   ok('no image upscaled past 1.05x', r.worstUp.every((x) => x.r <= 1.05), JSON.stringify(r.worstUp));
   ok('split headings keep word spacing', r.headings.every((h) => !/[a-záðéíóúýþæö][A-ZÁÐÉÍÓÚÝÞÆÖ]/.test(h)), r.headings.find((h) => /[a-záðéíóúýþæö][A-ZÁÐÉÍÓÚÝÞÆÖ]/.test(h)) || '');
   ok('lang=is', r.lang === 'is', r.lang);
+  ok('no run-together text between stacked parts', r.runOn.length === 0, r.runOn.slice(0, 4).join(' | '));
   ok('one grid rule per section + footer', r.grids === 10, String(r.grids));
 
   /* ---- scrub reversibility: settle, sample, move away, return, compare ---- */
