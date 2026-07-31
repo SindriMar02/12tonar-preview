@@ -9,6 +9,17 @@
   'use strict';
 
   const doc = document.documentElement;
+  /* THE BACKSTOP. Two classes on this page set `overflow: hidden` on the body, and
+     both are released by rAF-driven timelines. Each now has its own failsafe, but a
+     page that cannot be scrolled is a total failure and it should not depend on my
+     getting every one of those paths right, today or after the next edit. This runs
+     off setTimeout, which keeps ticking when rAF does not, and simply refuses to let
+     the locks outlive their budget. */
+  setTimeout(() => {
+    document.body.classList.remove('al-loading', 'al-intro');
+    document.querySelector('[data-load]')?.setAttribute('data-done', '1');
+  }, 6000);
+
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
   const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -25,30 +36,19 @@
   }
 
   let raf = 0, last = 0;
-  /* ---------------- Lenis ----------------
-     Smooth scroll on the WHEEL only, and stepped from the loop below rather than from
-     its own, so the two cannot both hold a requestAnimationFrame open and the engine
-     still idle-cancels when nothing is moving. `syncTouch` stays off on purpose: the
-     damping law on this page is that it belongs on the wheel and never on a finger.
-     Off entirely under reduced motion. */
-  let lenis = null;
-  if (!reduce.matches && typeof window.Lenis === 'function') {
-    lenis = new window.Lenis({
-      duration: 1.05,
-      easing: (t) => Math.min(1, 1.001 - 2 ** (-10 * t)),
-      smoothWheel: true,
-      syncTouch: false,
-      autoRaf: false,
-      anchors: false,
-    });
-  }
+  /* No smooth-scroll library. Lenis was here and it is gone on purpose: it
+     preventDefaults the wheel and then re-implements scrolling on a requestAnimationFrame
+     loop, which turns "the page scrolls" from something the browser guarantees into
+     something conditional on my loop running. Any surface that throttles or suspends rAF
+     (a backgrounded tab, an embedded preview pane, a machine under load) then has a page
+     that cannot be scrolled at all. This engine's damped channels are what make the page
+     feel smooth; the scroll itself stays native and unbreakable. */
   let wakeUntil = 0;
 
   function frame(now) {
     raf = 0;
     const dt = last ? Math.min((now - last) / 1000, 0.05) : 0.016;
     last = now;
-    if (lenis) lenis.raf(now);
 
     let moving = false;
     for (const c of channels) {
@@ -59,36 +59,18 @@
       else moving = true;
       c.apply(c.cur);
     }
-    /* Lenis owns the scroll position, so the loop has to outlive the channels: it stays
-       alive while Lenis is still easing and for a moment after any input, because with
-       autoRaf off Lenis cannot emit a scroll event until something calls its raf, and a
-       loop that only woke on `scroll` would deadlock on the very first wheel notch. */
-    if (moving || dragging || (lenis && lenis.isScrolling) || now < wakeUntil) {
-      raf = requestAnimationFrame(frame);
-    } else last = 0;
+    /* The loop outlives the channels by a short tail after any input, so a wheel notch
+       that lands between two settled states still gets a frame to act on. */
+    if (moving || dragging || now < wakeUntil) raf = requestAnimationFrame(frame);
+    else last = 0;
   }
   function wake() {
     wakeUntil = performance.now() + 900;
     if (!raf) raf = requestAnimationFrame(frame);
   }
-  if (lenis) lenis.on('scroll', wake);
   for (const ev of ['wheel', 'touchstart', 'touchmove', 'keydown', 'pointerdown']) {
     addEventListener(ev, wake, { passive: true });
   }
-  /* In-page anchors go through Lenis, or they jump while it is easing. */
-  if (lenis) {
-    document.addEventListener('click', (e) => {
-      const a = e.target.closest('a[href^="#"]');
-      if (!a) return;
-      const id = a.getAttribute('href').slice(1);
-      const el = id ? document.getElementById(id) : null;
-      if (!el) return;
-      e.preventDefault();
-      lenis.scrollTo(el, { duration: 1.15 });
-      history.replaceState(null, '', '#' + id);
-    });
-  }
-
   /* ---------------- page channels ----------------
      NOTHING here writes to the root element any more, and that single fact is most of this
      page's scroll cost.
@@ -1554,6 +1536,26 @@
 
     document.body.classList.add('al-loading');
 
+    const SWEEP_BUDGET = 3200;   /* the 1000ms sweep plus the flight; this is the ceiling */
+
+    /* THIS PAGE HOLDS `overflow: hidden` ON THE BODY WHILE THE LOADER RUNS, and the
+       loader's own progress is driven by requestAnimationFrame. rAF is SUSPENDED in a
+       background tab and throttled to a crawl on a loaded machine or in an embedded
+       preview pane, so `tick` can simply never reach the end, `land()` never runs, the
+       class never comes off, and the page is not slow, it is LOCKED. That is exactly
+       what "I cannot even scroll it" looks like, and no amount of frame-rate work
+       fixes it.
+
+       setTimeout is the only clock that still ticks when rAF does not (background tabs
+       clamp it to ~1s, they do not suspend it), so it is the failsafe. And if the
+       document is already hidden when the loader starts there is nobody watching the
+       animation at all, so it is skipped outright. */
+    if (document.visibilityState === 'hidden') { land(); return; }
+    const failsafe = setTimeout(land, SWEEP_BUDGET);
+    const onVis = () => { if (document.visibilityState === 'visible') land(); };
+    document.addEventListener('visibilitychange', onVis);
+    const clearFailsafe = () => { clearTimeout(failsafe); document.removeEventListener('visibilitychange', onVis); };
+
     /* cells sized off the lockup's own 264:36 proportion so they read as square pixels */
     const cols = innerWidth < 720 ? 26 : 44;
     const rows = Math.max(3, Math.round((cols * 36) / 264));
@@ -1623,7 +1625,11 @@
       setTimeout(land, 700);
     }
 
+    let landed = false;
     function land() {
+      if (landed) return;
+      landed = true;
+      if (typeof clearFailsafe === 'function') clearFailsafe();
       hdLogo?.removeAttribute('data-waiting');
       load.setAttribute('data-done', '1');
       document.body.classList.remove('al-loading');
@@ -1654,6 +1660,13 @@
     if (reduce.matches) { finish(); return; }
 
     document.body.classList.add('al-intro');
+    /* `.al-intro` is the page's second `overflow: hidden`, and this timeline is rAF
+       driven too. Same failsafe, same reason. */
+    if (document.visibilityState === 'hidden') { finish(); return; }
+    setTimeout(finish, DUR + 1200);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') finish();
+    }, { once: true });
     addEventListener('pointerdown', finish, { once: true });
     addEventListener('keydown', finish, { once: true });
     addEventListener('wheel', finish, { once: true, passive: true });

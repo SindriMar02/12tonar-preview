@@ -363,7 +363,6 @@ ${noindex ? '<meta name="robots" content="noindex, nofollow">\n<meta name="googl
   </div>
 </footer>
 
-<script src="vendor/lenis.min.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>
