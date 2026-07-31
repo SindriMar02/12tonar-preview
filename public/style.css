@@ -1410,3 +1410,24 @@ body.al-loading { overflow: hidden; }
   .al-rel-link:hover .al-rel-img,
   .al-rel-link:focus-visible .al-rel-img { transform: none; }
 }
+
+/* A split line is one inline span per character so each can carry its own stagger, and
+   the browser may break a line between any two inline spans. The word wrapper puts the
+   break opportunities back where they belong: between words. */
+.al-word { white-space: nowrap; }
+
+/* Dragging a rail must not sweep a text selection along with it. These surfaces are
+   dragged by design, so a pointer down on them is a grab, never the start of a
+   selection; `pan-y` keeps a vertical swipe scrolling the PAGE on touch. */
+.al-rail, .al-rail-track, .al-tl, .al-tl-track, .al-roll-list, .al-odo {
+  user-select: none; -webkit-user-select: none;
+}
+.al-rail, .al-tl { touch-action: pan-y; }
+.al-rail img, .al-tl img { -webkit-user-drag: none; user-drag: none; }
+
+/* A roll row that would run off the edge is scaled to its own width by fitNames(), so
+   every artist's name stays whole. Rows that already fit carry no --fit at all. */
+.al-name-t { display: inline-block; white-space: nowrap; }
+/* font-size, not scaleX: squashing the glyphs horizontally distorts the letterforms,
+   and at the floor this reaches that is very visible on a condensed face. */
+.al-name-t[style*='--fit'] { font-size: calc(1em * var(--fit)); }

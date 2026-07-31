@@ -81,10 +81,12 @@ export const ROSTER = {
 
 export const HISTORY = {
   eyebrow: 'Sagan',
-  title: 'Tuttugu og átta ár',
+  /* Short on purpose. "Tuttugu og átta ár" orphaned "ár" onto its own line at 390px in
+     a display face this large, and the fact itself reads better in the lead anyway. */
+  title: 'Frá 1998',
   lead:
-    'Sama búðin á sama horninu, frá opnun 1998 að lista NME yfir bestu plötubúðir '
-    + 'heims. Dragðu tímalínuna til hliðar.',
+    'Tuttugu og átta ár í sömu búðinni á sama horninu, frá opnun að lista NME yfir '
+    + 'bestu plötubúðir heims. Dragðu tímalínuna til hliðar.',
   drag: 'Dragðu tímalínuna',
   items: [
     {

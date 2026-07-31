@@ -398,6 +398,23 @@
     }
     function run() { if (!rraf && !reduce.matches) rraf = requestAnimationFrame(tick); }
 
+    /* Trackpad and shift+wheel scroll the rail sideways. The rail is an INFINITE
+       marquee driven by a transform, not a native scroller, so there is nothing for a
+       horizontal gesture to act on unless it is wired up: dragging worked and scrolling
+       did nothing, which is not what a row of records looks like it should do.
+       A gesture is only consumed when it is genuinely horizontal (or shift-modified),
+       so vertical wheeling still scrolls the PAGE and the rail never hijacks it. */
+    root.addEventListener('wheel', (e) => {
+      const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      if (!horizontal && !e.shiftKey) return;
+      const d = horizontal ? e.deltaX : e.deltaY;
+      if (!d) return;
+      e.preventDefault();
+      v = 0;
+      write(x + d);
+      run();
+    }, { passive: false });
+
     let id = null, px = 0, pt = 0, moved = 0;
     root.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -802,17 +819,23 @@
       rowEl.className = 'al-row';
       const inner = document.createElement('span');
       inner.className = 'al-row-i';
-      const line = row.words.join(' ');
-      [...line].forEach((ch) => {
-        if (ch === ' ') {
-          inner.appendChild(document.createTextNode(' '));
-          return;
-        }
-        const c = document.createElement('span');
-        c.className = 'al-ch';
-        c.style.setProperty('--i', ci++);
-        c.textContent = ch;
-        inner.appendChild(c);
+      /* Chars are wrapped PER WORD. Every character is its own inline span so it can
+         carry a stagger, and the browser will happily break a line between any two
+         inline spans — which broke "átta ár" as "átta á" / "r" on a narrow window.
+         The word wrapper is `white-space: nowrap`, so the only break opportunities
+         left are the spaces between words, where they belong. */
+      row.words.forEach((word, wi) => {
+        const wEl = document.createElement('span');
+        wEl.className = 'al-word';
+        [...word].forEach((ch) => {
+          const c = document.createElement('span');
+          c.className = 'al-ch';
+          c.style.setProperty('--i', ci++);
+          c.textContent = ch;
+          wEl.appendChild(c);
+        });
+        inner.appendChild(wEl);
+        if (wi < row.words.length - 1) inner.appendChild(document.createTextNode(' '));
       });
       rowEl.appendChild(inner);
 
@@ -850,6 +873,7 @@
       });
     });
     measureSplits();
+    fitNames();
     /* anything already on screen at build time plays immediately */
     const vh = innerHeight;
     for (const s of splits) if (s.top - scrollY < vh * 0.92) s.el.classList.add('is-in');
@@ -948,26 +972,32 @@
          nothing else: the previous version added cap0 into lineH and THEN added cap1 when
          placing line 2, which inserted a whole empty cap height between the words. */
       const capOf = (px) => px * 0.7;
-      /* Humane's acutes sit 0.18em ABOVE the cap height and its diaereses 0.17em,
-         measured off the font's own glyph bounds (cap 0.71em, Ó/Á top 0.89em).
-         Alda's stack used a 0.015em hairline of leading because ALDA and MUSIC carry
-         no accents. TÓNAR does, and with a hairline the acute is drawn straight
-         through the line above it: the Ó rendered as a plain O and the mark read
-         "TONAR". The lead is therefore taken from line 2's OWN content, so the
-         geometry stays right if the wordmark ever changes. */
-      const RISE = { 'Á': .18, 'É': .18, 'Í': .18, 'Ó': .18, 'Ú': .18, 'Ý': .18,
-                     'Ö': .17, 'Ä': .17, 'Å': .216 };
-      const riseOf = (line) => [...line].reduce((m, ch) => Math.max(m, RISE[ch] || 0), 0);
-      const lift = riseOf(LINES[1]);
-      st.rise = LINES.map(riseOf);
-      const leadOf = (px0, px1) => px0 * 0.015 + px1 * lift;
-      let blockH = capOf(raw[0]) + leadOf(raw[0], raw[1]) + capOf(raw[1]);
+      /* ASK THE CANVAS how tall the ink actually is, per line, instead of assuming the
+         cap height. Two things sit above Humane's 0.7em cap and a flat constant misses
+         both: an acute (Ó, Á … 0.18em) and, far smaller but just as visible, the
+         optical overshoot of a ROUND glyph. Humane's 2 and O top out at 0.710em against
+         a flat T's 0.700, so clipping the reveal at the cap sliced ~0.01em off the top
+         of the 2 in "12" — a hairline, and Sindri spotted it.
+         actualBoundingBoxAscent is the real inked height of this exact string, so it
+         covers accents, overshoot and anything the copy becomes later. Measured once
+         per layout at the reference size and scaled, never per frame. */
+      const inkR = LINES.map((l) => {
+        const m = ctx.measureText(l);
+        const a = m.actualBoundingBoxAscent;
+        return a > 0 ? a / REF : 0.7;   /* older engines: fall back to the cap */
+      });
+      const askOf = (i, px) => Math.max(capOf(px), inkR[i] * px);
+      /* line 2's cap top sits `lead` below line 1's baseline, so the lead has to clear
+         whatever line 2 puts ABOVE its own cap or the accent draws through line 1 */
+      const leadOf = (px0, px1) => px0 * 0.015 + Math.max(0, inkR[1] * px1 - capOf(px1));
+      let blockH = askOf(0, raw[0]) + leadOf(raw[0], raw[1]) + capOf(raw[1]);
       const budget = st.h * (wide ? 0.62 : 0.5);
       const k = blockH > budget ? budget / blockH : 1;
       st.sizes = raw.map((v) => v * k);
       st.lead = leadOf(st.sizes[0], st.sizes[1]);
-      blockH = capOf(st.sizes[0]) + st.lead + capOf(st.sizes[1]);
-      st.top = (st.h - blockH) / 2 + capOf(st.sizes[0]);   /* baseline of line 1 */
+      st.ask = st.sizes.map((px, i) => askOf(i, px));   /* true ink above each baseline */
+      blockH = st.ask[0] + st.lead + capOf(st.sizes[1]);
+      st.top = (st.h - blockH) / 2 + st.ask[0];   /* baseline of line 1 */
       /* both lines were fitted to `target`, so after the height clamp they are target*k wide */
       st.tw = target * k;
       st.ready = st.sizes.every((v) => v > 0);
@@ -1035,7 +1065,7 @@
        that place the type, widened by `part` because the two lines separate on scroll. */
     function inkBox(part) {
       const pad = Math.max(6, st.sizes[0] * 0.06);
-      const capA = st.sizes[0] * 0.7;
+      const capA = st.ask?.[0] ?? st.sizes[0] * 0.7;
       const y1 = st.top, y2 = y1 + st.lead + st.sizes[1] * 0.7;
       const x0 = Math.max(0, (st.w - st.tw) / 2 - pad);
       const y0 = Math.max(0, y1 - capA - part - pad);
@@ -1081,10 +1111,9 @@
       const r2 = rev(0.24, 0.74);
       if (r1 > 0) {
         ctx.save();
-        /* cap PLUS the line's accent rise: clipping to the cap alone slices the acute
-           off an Í Á Ó Ú Ý, which is what made this mark read "TONAR". Same trap as the
-           padded overflow mask the split headings use. */
-        const cap = st.sizes[0] * (0.7 + (st.rise?.[0] || 0));
+        /* the measured ink height, not the cap: the cap clips an acute AND the
+           optical overshoot on a round glyph */
+        const cap = st.ask?.[0] ?? st.sizes[0] * 0.7;
         ctx.beginPath();
         ctx.rect(0, y1 - cap * r1, w, cap * r1 + 2);
         ctx.clip();
@@ -1094,7 +1123,7 @@
       }
       if (r2 > 0) {
         ctx.save();
-        const cap = st.sizes[1] * (0.7 + (st.rise?.[1] || 0));
+        const cap = st.ask?.[1] ?? st.sizes[1] * 0.7;
         ctx.beginPath();
         ctx.rect(0, y2 - cap * r2, w, cap * r2 + 2);
         ctx.clip();
@@ -1191,7 +1220,7 @@
          needs this, and it must not fall back to the canvas box, which is the whole frame. */
       band() {
         if (!st.ready) return null;
-        return [st.top - st.sizes[0] * (0.7 + (st.rise?.[0] || 0)), st.top + st.lead + st.sizes[1] * 0.7];
+        return [st.top - (st.ask?.[0] ?? st.sizes[0] * 0.7), st.top + st.lead + st.sizes[1] * 0.7];
       },
       pointer(x, y) { st.px = x; st.py = y; },
       setIntro(v) { st.intro = v; if (!st.live) draw(); },
@@ -1636,6 +1665,27 @@
       setTimeout(() => load.remove(), 900);
       done();
     }
+  }
+
+  /* ---------------- long names have to FIT ----------------
+     The roll sets 60 artist names in a condensed display face at one size. Alda's own
+     roster tops out at "Herra Hnetusmjör"; 12 Tónar's catalogue carries
+     "Sigurður Guðmundsson & Memfismafían" and "Kött Grá Pje & Fonetik Simbol", which
+     ran straight off the right edge on a phone and read as cut off rather than as a
+     roll bleeding. Each row that would overflow is scaled down to its own width, so
+     every name is whole at every viewport; the rest keep the full size. */
+  function fitNames() {
+    const rows = document.querySelectorAll('.al-roll-list .al-name-t');
+    if (!rows.length) return;
+    for (const el of rows) el.style.removeProperty('--fit');
+    /* read every width first, then write every scale: interleaving them would force a
+       layout per row */
+    const need = [];
+    for (const el of rows) {
+      const avail = el.parentElement.clientWidth - (el.offsetLeft - el.parentElement.offsetLeft);
+      if (avail > 0 && el.scrollWidth > avail + 1) need.push([el, avail / el.scrollWidth]);
+    }
+    for (const [el, k] of need) el.style.setProperty('--fit', Math.max(0.45, k * 0.99).toFixed(3));
   }
 
   /* ---------------- the opening sequence ---------------- */

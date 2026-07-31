@@ -43,6 +43,13 @@ const sleeve = (r, i) => `
   </a>
 </article>`;
 
+/* A browse index shows the primary credit. Three-way collaboration credits come out of
+   the product titles at up to 59 characters ("Stereo Hypnosis / Hans-Joachim Roedelius /
+   Eraldo Bernocchi"), which no amount of scaling fits on a roll row without making that
+   one name a third the size of its neighbours. The row shows the credit before the first
+   slash; the complete credit stays on the plate's alt text, where it is read out in full. */
+const rollName = (n) => (n.length > 30 && n.includes(' / ') ? n.split(' / ')[0].trim() : n);
+
 /* The row carries the record's title so the now-block can name the sleeve on screen.
    A plate here is an album cover, not a portrait, so naming only the artist would leave
    the picture uncaptioned. */
@@ -50,7 +57,7 @@ const rosterRow = (a, i) => `
 <li class="al-name" data-i="${i}" data-title="${esc(a.title)}">
   <button type="button" class="al-name-b" data-goto="${i}" aria-label="Sýna ${esc(a.name)}">
     <span class="al-name-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
-    <span class="al-name-t">${esc(a.name)}</span>
+    <span class="al-name-t">${esc(rollName(a.name))}</span>
   </button>
 </li>`;
 
@@ -259,7 +266,7 @@ ${noindex ? '<meta name="robots" content="noindex, nofollow">\n<meta name="googl
             <p class="al-roll-now" aria-live="polite">
               <span class="al-roll-now-n" data-roll-num>01</span>
               <span class="al-roll-now-l">${esc(ROSTER.countLabel)}</span>
-              <span class="al-roll-now-t" data-roll-name>${esc(ARTISTS[0].name)}</span>
+              <span class="al-roll-now-t" data-roll-name>${esc(rollName(ARTISTS[0].name))}</span>
               <span class="al-roll-now-r" data-roll-title>${esc(ARTISTS[0].title)}</span>
             </p>
             <canvas class="al-wave al-wave--roll" data-wave="roll" aria-hidden="true"></canvas>
