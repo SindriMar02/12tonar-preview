@@ -1,28 +1,39 @@
-"""Build every image asset and the catalogue data file from the harvested Shopify export.
+"""Build every image the Alda-structured build needs, from 12 Tónar's own catalogue.
 
-Two rules this script enforces, because both are honesty rules and not just craft:
-  1. A sleeve is NEVER emitted larger than its own source pixels. 138 of their 345
-     covers are 225x225 thumbnails; the design shows a picture at the size its
-     resolution can carry, and the tier a record lands in is decided HERE, from the
-     true dimensions, not by eye later.
-  2. Caption and file come out of the SAME record, so a title can never drift off a
-     picture (redesign-craft-ledger #43).
+Emits into the SAME paths the engine already expects, so app.js never has to change:
+
+    public/img/artists/<slug>.webp   the roll plates   (one cover per artist)
+    public/img/shop/<slug>.webp      the rail sleeves  (the records, with prices)
+
+Two rules carried over from the first build, because both are honesty rules:
+
+  1. A picture is never emitted larger than its own source. 12 Tónar's catalogue is
+     345 covers of which only 29 are >=1000px and 138 are 225x225, so the tier a
+     record lands in is decided HERE, from its true dimensions.
+  2. Caption and file come out of the SAME record, so a title can never drift onto
+     the wrong picture.
+
+The roll's full-bleed threshold is raised from Alda's 800 to 1440. Alda's plates are
+PORTRAITS, taller than wide, so on a 1440x900 viewport the 900px height governs and
+800px is honest. A SQUARE sleeve on the same viewport is governed by the 1440px width,
+so anything under that would be a blow-up. Everything below the threshold renders as
+Alda's contained "archive" plate over an out-of-focus wash of itself, which for a
+record sleeve reads as the object it is rather than as a stretched photograph.
 """
-import json, os, re, unicodedata, subprocess, shutil
-from PIL import Image, ImageEnhance
+import json, os, shutil, unicodedata
+from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COVERS = os.path.join(ROOT, 'research/covers')
-OUT_SLEEVE = os.path.join(ROOT, 'public/img/sleeves')
-OUT_TILE = os.path.join(ROOT, 'public/img/tiles')
-OUT_IMG = os.path.join(ROOT, 'public/img')
+OUT_ROLL = os.path.join(ROOT, 'public/img/artists')
+OUT_SHOP = os.path.join(ROOT, 'public/img/shop')
 
-CRATE_MIN = 540          # a crate card renders at 260 CSS px; dpr2 wants 520
-CRATE_MAX = 560
-TILE_MAX = 240           # a basement tile renders at <=104 CSS px; dpr2 wants 208
-CRATE_COUNT = 44
-TILE_COUNT = 78
-CELL = 88                # wall montage cell
+FULLBLEED = 1440        # at or above this a square cover may cover a 1440 viewport
+ROLL_MIN = 480          # below this a sleeve is too small to carry a section at all
+ROLL_COUNT = 60
+SHOP_MAX = 760          # matches the rail's own render size
+SHOP_MIN = 540
+SHOP_COUNT = 18
 
 IS_ORDER = 'aábcdðeéfghiíjklmnoópqrstuúvwxyýzþæö'
 RANK = {c: i for i, c in enumerate(IS_ORDER)}
@@ -34,12 +45,12 @@ def is_key(s):
         elif ch.isdigit(): out.append((-1, int(ch)))
         else:
             base = unicodedata.normalize('NFD', ch)[0]
-            out.append((0, RANK.get(base, 99)) if base in RANK else (1, ord(ch)))
+            out.append((0, RANK[base]) if base in RANK else (1, ord(ch)))
     return out
 
 SEPS = (' – ', ' - ', ' — ')
 def split_title(t):
-    """Artist / title, using ONE separator for both halves so they can never disagree."""
+    """Artist / title from ONE separator, so the two halves can never disagree."""
     t = t.strip()
     for s in SEPS:
         if s in t:
@@ -48,6 +59,7 @@ def split_title(t):
     return None, t
 
 MERCH = {'Tote Bag', 'T-Shirt'}
+FMT = {'Vinyl Record': 'LP', 'CD': 'CD'}
 
 def load():
     ps = []
@@ -55,19 +67,23 @@ def load():
         ps += json.load(open(os.path.join(ROOT, f)))['products']
     rows = []
     for p in ps:
-        if not p['images']: continue
+        if not p['images'] or p['product_type'] in MERCH:
+            continue
         im = p['images'][0]
         ext = os.path.splitext(im['src'].split('?')[0])[1] or '.jpg'
         path = os.path.join(COVERS, p['handle'] + ext)
-        if not os.path.exists(path): continue
+        if not os.path.exists(path):
+            continue
         artist, title = split_title(p['title'])
-        merch = p['product_type'] in MERCH or (artist is None and p['title'].startswith('12 Tónar'))
+        if not artist or artist.lower().startswith('12 tónar'):
+            continue
         v = p['variants'][0] if p['variants'] else None
         rows.append(dict(
-            handle=p['handle'], artist=artist, title=title, merch=merch,
-            fmt=p['product_type'] or '', src=path, w=im['width'], h=im['height'],
+            slug=p['handle'], artist=artist, title=title,
+            fmt=FMT.get(p['product_type'], p['product_type'] or 'LP'),
+            src=path, w=im['width'], h=im['height'],
             price=int(float(v['price'])) if v else 0,
-            avail=any(x['available'] for x in p['variants']),
+            url='https://12tonar.myshopify.com/products/' + p['handle'],
         ))
     return rows
 
@@ -82,113 +98,80 @@ def webp(src, dst, longest, q):
         return im.size
 
 def main():
-    for d in (OUT_SLEEVE, OUT_TILE):
+    for d in (OUT_ROLL, OUT_SHOP):
         shutil.rmtree(d, ignore_errors=True); os.makedirs(d, exist_ok=True)
     rows = load()
-    records = [r for r in rows if not r['merch'] and r['artist']]
 
-    # ---- crate: one record per artist, the artist's highest-resolution sleeve ----
+    # one record per artist, that artist's highest-resolution sleeve
     best = {}
-    for r in records:
+    for r in rows:
         k = r['artist']
         if k not in best or min(r['w'], r['h']) > min(best[k]['w'], best[k]['h']):
             best[k] = r
-    crate_pool = [r for r in best.values() if min(r['w'], r['h']) >= CRATE_MIN]
-    crate_pool.sort(key=lambda r: -min(r['w'], r['h']))
-    crate = sorted(crate_pool[:CRATE_COUNT], key=lambda r: is_key(r['artist']))
-    for r in crate:
-        dst = os.path.join(OUT_SLEEVE, r['handle'] + '.webp')
-        r['ow'], r['oh'] = webp(r['src'], dst, CRATE_MAX, 80)
-        r['file'] = 'img/sleeves/' + r['handle'] + '.webp'
 
-    # ---- basement tiles: the small sleeves, shown small ----
-    used = {r['handle'] for r in crate}
-    tile_pool = [r for r in records if r['handle'] not in used and min(r['w'], r['h']) < CRATE_MIN]
-    tile_pool.sort(key=lambda r: (-min(r['w'], r['h']), r['handle']))
-    tiles = tile_pool[:TILE_COUNT]
-    for r in tiles:
-        dst = os.path.join(OUT_TILE, r['handle'] + '.webp')
-        r['ow'], r['oh'] = webp(r['src'], dst, TILE_MAX, 78)
-        r['file'] = 'img/tiles/' + r['handle'] + '.webp'
+    roll_pool = [r for r in best.values() if min(r['w'], r['h']) >= ROLL_MIN]
+    roll_pool.sort(key=lambda r: -min(r['w'], r['h']))
+    roll = sorted(roll_pool[:ROLL_COUNT], key=lambda r: is_key(r['artist']))
+    for r in roll:
+        r['ow'], r['oh'] = webp(r['src'], os.path.join(OUT_ROLL, r['slug'] + '.webp'), 1800, 80)
+        # A separate 40px WASH for the archive plates' backdrop. Alda's archive plate
+        # paints its photograph twice: once as the contained <img> and once as a
+        # blur(38px) background behind it. Alda had six of them; this build has 47,
+        # and 47 full-size images decoded twice and run through a 38px blur is what
+        # took the page to 7fps. A 40px source scaled to cover is already smooth, so
+        # the second copy costs ~1KB and the CSS blur drops to a finishing pass.
+        webp(r['src'], os.path.join(OUT_ROLL, r['slug'] + '-w.webp'), 40, 60)
+        # A phone-sized plate. A 390px phone shows a full-bleed plate at 390 CSS px and
+        # an archive plate at ~200, so at dpr3 it needs 1170 and 610 respectively, not
+        # 1800. Decoding the desktop plate on a phone was the long task that survived
+        # every other fix here.
+        r['mw'], r['mh'] = webp(r['src'], os.path.join(OUT_ROLL, r['slug'] + '-m.webp'), 760, 78)
 
-    # ---- the wall: every RECORD in the shop, one image ----
-    # Merch is excluded: the claim the hero makes is "every record", and a wall of
-    # tote bags would make that claim false. Order is deterministically interleaved
-    # rather than alphabetical, because sorting by handle clusters an artist's whole
-    # discography (and every t-shirt) into one corner of the field.
-    wall_rows = sorted([r for r in rows if not r['merch']], key=lambda r: r['handle'])
-    step = 97  # coprime with the count, so the walk visits every record exactly once
-    wall_rows = [wall_rows[(i * step) % len(wall_rows)] for i in range(len(wall_rows))]
-    cols = 18
-    n = len(wall_rows)
-    rws = (n + cols - 1) // cols
-    sheet = Image.new('RGB', (cols * CELL, rws * CELL), (18, 36, 118))
-    for i, r in enumerate(wall_rows):
-        with Image.open(r['src']) as im:
-            im = im.convert('RGB')
-            w, h = im.size
-            s = CELL / min(w, h)
-            im = im.resize((max(1, round(w * s)), max(1, round(h * s))), Image.LANCZOS)
-            l = (im.size[0] - CELL) // 2; t = (im.size[1] - CELL) // 2
-            im = im.crop((l, t, l + CELL, t + CELL))
-        sheet.paste(im, ((i % cols) * CELL, (i // cols) * CELL))
-    # The wall is seen through the letters of a sign on an acid-yellow plate, so its
-    # BRIGHT end is what decides whether the wordmark is readable: measured, a raw
-    # montage put the lightest 3% of glyph pixels at 1.69:1 against the plate, well
-    # under the 3:1 large-text floor. Grading it here rather than tinting it in CSS
-    # is both cheaper (no per-frame blend of a full-viewport layer) and better: a
-    # brightness/colour map applied at the asset's own resolution is the same picture
-    # as one applied after the upscale, and this way the tone curve is baked once.
-    # Chroma is pushed back up after the darkening so the covers stay recognisable.
-    graded = ImageEnhance.Brightness(sheet).enhance(0.62)
-    graded = ImageEnhance.Color(graded).enhance(1.3)
-    graded = Image.blend(graded, Image.new('RGB', graded.size, (18, 36, 118)), 0.28)
-    graded.save(os.path.join(OUT_IMG, 'wall.webp'), 'WEBP', quality=56, method=6)
-    graded.resize((graded.size[0] // 2, graded.size[1] // 2), Image.LANCZOS).save(
-        os.path.join(OUT_IMG, 'wall-sm.webp'), 'WEBP', quality=64, method=6)
-    print(f'wall {sheet.size[0]}x{sheet.size[1]} from {n} sleeves')
+    # the rail: the best sleeves again, biggest first, then alphabetical
+    shop_pool = [r for r in best.values() if min(r['w'], r['h']) >= SHOP_MIN]
+    shop_pool.sort(key=lambda r: -min(r['w'], r['h']))
+    shop = sorted(shop_pool[:SHOP_COUNT], key=lambda r: is_key(r['artist']))
+    for r in shop:
+        r['sw'], r['sh'] = webp(r['src'], os.path.join(OUT_SHOP, r['slug'] + '.webp'), SHOP_MAX, 82)
 
-    # ---- the shop's own photographs ----
-    A = '/tmp/12t-assets'
-    photos = {}
-    for key, srcname, longest, q in (
-        ('shopfront', '12_Tonar.jpg', 1600, 82),
-        ('racks', 'coll-isl_vinyll.jpg', 640, 84),
-        ('cds', 'coll-isl_CD.jpg', 600, 84),
-        ('totes', 'coll-Toskur.jpg', 600, 84),
-        ('tees', 'coll-Bolir.jpg', 600, 84),
-    ):
-        s = os.path.join(A, srcname)
-        if not os.path.exists(s): print('MISSING', s); continue
-        w, h = webp(s, os.path.join(OUT_IMG, key + '.webp'), longest, q)
-        photos[key] = dict(file=f'img/{key}.webp', w=w, h=h)
-    shutil.copy(os.path.join(A, 'logo-orig.jpg'), '/tmp/12t-assets/_logo.jpg')
-    lw, lh = webp(os.path.join(A, 'logo-orig.jpg'), os.path.join(OUT_IMG, 'logo.webp'), 1102, 88)
-    photos['logo'] = dict(file='img/logo.webp', w=lw, h=lh)
+    def js(v):
+        return json.dumps(v, ensure_ascii=False)
 
-    def clean(r, keys):
-        return {k: r[k] for k in keys}
-    data = dict(
-        crate=[clean(r, ('artist', 'title', 'fmt', 'price', 'avail', 'file', 'ow', 'oh', 'w', 'h')) for r in crate],
-        tiles=[clean(r, ('artist', 'title', 'fmt', 'price', 'file', 'ow', 'oh')) for r in tiles],
-        photos=photos,
-        stats=dict(
-            products=len(rows), records=len(records), artists=len({r['artist'] for r in records}),
-            merch=len([r for r in rows if r['merch']]),
-            vinyl=len([r for r in rows if r['fmt'] == 'Vinyl Record']),
-            cd=len([r for r in rows if r['fmt'] == 'CD']),
-            available=len([r for r in rows if r['avail']]),
-            wall_cols=cols, wall_rows=rws, wall_cell=CELL,
-            price_min=min(r['price'] for r in records if r['price']),
-            price_max=max(r['price'] for r in records if r['price']),
-            price_med=sorted(r['price'] for r in records if r['price'])[len([r for r in records if r['price']]) // 2],
-        ),
-    )
-    with open(os.path.join(ROOT, 'src/catalogue.json'), 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=1)
-    print('crate', len(crate), 'tiles', len(tiles))
-    print('stats', data['stats'])
-    up = max((r['ow'] / min(r['w'], r['h']) for r in crate + tiles), default=0)
-    print(f'max source->emitted ratio {up:.3f} (must be <= 1.0)')
+    lines = ['''/* Generated by tools/assets.py from 12 Tónar's own Shopify catalogue, harvested
+   2026-07-31. Name, title, price and file are emitted from the SAME record, so a
+   caption can never drift onto the wrong sleeve. Do not hand-edit.
+
+   w/h are the emitted asset's true pixels; nothing is ever rendered larger.
+   `full` marks the sleeves big enough to cover a 1440 viewport honestly; the rest
+   render as contained archive plates over a wash of themselves. */
+export const ARTISTS = [''']
+    for r in roll:
+        full = min(r['ow'], r['oh']) >= FULLBLEED
+        lines.append(
+            f"  {{ name: {js(r['artist'])}, slug: {js(r['slug'])}, "
+            f"w: {r['ow']}, h: {r['oh']}, mw: {r['mw']}, title: {js(r['title'])}, "
+            f"fmt: {js(r['fmt'])}, price: {r['price']}{', full: true' if full else ''} }},")
+    lines.append('];\n')
+    lines.append('''/* The rail: real stock in their own store, with the real ISK price and a link to the
+   real product page. Prices read 2026-07-31. */
+export const RELEASES = [''')
+    for r in shop:
+        lines.append(
+            f"  {{ artist: {js(r['artist'])}, title: {js(r['title'])}, "
+            f"format: {js(r['fmt'])}, price: {r['price']}, slug: {js(r['slug'])}, "
+            f"w: {r['sw']}, h: {r['sh']}, url: {js(r['url'])} }},")
+    lines.append('];')
+
+    with open(os.path.join(ROOT, 'src/roster.mjs'), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines) + '\n')
+
+    full_n = sum(1 for r in roll if min(r['ow'], r['oh']) >= FULLBLEED)
+    # compare like with like: emitted WIDTH against source WIDTH. Comparing against
+    # min(w,h) is wrong the moment a sleeve is not square and reports a fake blow-up.
+    up = max(max(r['ow'] / r['w'] for r in roll), max(r['sw'] / r['w'] for r in shop))
+    print(f'roll {len(roll)} artists ({full_n} full-bleed, {len(roll) - full_n} archive plates)')
+    print(f'rail {len(shop)} releases')
+    print(f'max emitted/source ratio {up:.3f} (must be <= 1.0)')
+    print('catalogue totals:', len(rows), 'records,', len({r["artist"] for r in rows}), 'artists')
 
 main()

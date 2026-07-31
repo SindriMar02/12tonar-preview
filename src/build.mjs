@@ -18,13 +18,13 @@ await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await cp(join(root, 'public'), dist, { recursive: true });
 
-/* Their own sign: yellow plate, blue keyline, blue type. A RELATIVE href in the page,
-   so the client's tab can never inherit another origin's icon. */
+/* Their own sign: the yellow plate, their black type. A RELATIVE href, so the client's
+   tab can never inherit another origin's icon. */
 const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-<rect width="64" height="64" fill="#F9F500"/>
-<rect x="4.5" y="4.5" width="55" height="55" fill="none" stroke="#122476" stroke-width="5"/>
-<text x="32" y="45" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-weight="700"
- font-size="34" letter-spacing="-1.5" text-anchor="middle" fill="#122476">12</text>
+<rect width="64" height="64" fill="#0A0A0B"/>
+<rect x="4" y="16" width="56" height="32" fill="#F9F500"/>
+<text x="32" y="41" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-weight="700"
+ font-size="22" letter-spacing="-1" text-anchor="middle" fill="#0A0A0B">12</text>
 </svg>`;
 await writeFile(join(dist, 'favicon.svg'), favicon);
 
@@ -33,7 +33,7 @@ if (isPreview) await writeFile(join(dist, '.nojekyll'), '');
 
 await writeFile(
   join(dist, 'robots.txt'),
-  isPreview ? 'User-agent: *\nDisallow: /\n' : 'User-agent: *\nAllow: /\n',
+  isPreview ? 'User-agent: *\nDisallow: /\n' : 'User-agent: *\nAllow: /\n'
 );
 
 console.log(`built dist/index.html${isPreview ? ` [preview: noindex, ${PREVIEW_ORIGIN}]` : ''}`);

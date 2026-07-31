@@ -1,590 +1,1422 @@
+/* Alda Music — frumgerð
+   Concept: „Aldan" — the wave that carried Icelandic music. One damped rAF engine in
+   app.js writes a handful of custom properties; every geometry rule below is derived
+   from them, so nothing here needs a CSS transition on a scrubbed value (double
+   smoothing reads as lag). Zero dependencies. */
+
+/* ---------- fonts: all local, Icelandic coverage machine-checked ---------- */
+@font-face {
+  font-family: 'Humane';
+  src: url('fonts/humane.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Archivo';
+  src: url('fonts/archivo-400.woff2') format('woff2');
+  font-weight: 400; font-display: swap;
+}
+@font-face {
+  font-family: 'Archivo';
+  src: url('fonts/archivo-500.woff2') format('woff2');
+  font-weight: 500; font-display: swap;
+}
+@font-face {
+  font-family: 'Archivo';
+  src: url('fonts/archivo-700.woff2') format('woff2');
+  font-weight: 700; font-display: swap;
+}
+@font-face {
+  font-family: 'Departure';
+  src: url('fonts/departure-mono.woff2') format('woff2');
+  font-weight: 400; font-display: swap;
+}
+
+/* ---------- tokens ---------- */
+:root {
+  /* The grounds are 12 Tónar's dark blue rather than a neutral vinyl black: their
+     shopfront sign has a blue keyline and blue type, their roof is blue corrugated
+     iron and their shelving is blue, so the page is lit the way the shop is. Chalk
+     measures 17.8:1 on it. */
+  --ink: #080B1A;
+  --ink-2: #0F1330;
+  /* their sign blue, used as a band ground so the colour is present as a plane and
+     not only as a tint of the black */
+  --blue: #122476;
+  --blue-2: #1B2E86;
+  --paper: #EFE9DE;
+  --paper-2: #E4DCCD;
+  /* Alda's accent was #DF3F5C, sampled from Alda's own logo. Everything else in this
+     system is transplanted verbatim, but shipping another company's brand colour on
+     12 Tónar's page is the one thing that would read as borrowed. This yellow is
+     sampled from 12 TÓNAR's own logo file (45.5% of its pixels) and the design is
+     otherwise untouched. 17.05:1 on the ink ground. Reverting is these two lines.
+     --red-deep is the twin for accent text on the bone sections, where the yellow
+     itself is 1.04:1 and unusable; #6E6200 measures 5.10:1 there. */
+  --red: #E5D400;
+  --red-deep: #6B5F00;
+  --chalk: #F6F4F1;
+  --dust: #8E8E96;
+  --slate: #55555C;
+
+  --dsp: 'Humane', 'Archivo Narrow', sans-serif;
+  --body: 'Archivo', system-ui, sans-serif;
+  --mono: 'Departure', ui-monospace, monospace;
+
+  --gut: clamp(18px, 4.4vw, 64px);
+  --band: clamp(84px, 11vw, 168px);
+  --ease: cubic-bezier(.22, .68, 0, 1);
+  --ease-o: cubic-bezier(.16, 1, .3, 1);
+
+  /* engine channels, all written from app.js. --al-p and --al-vel used to live here too;
+     they were set on the root every scroll frame and read by no declaration anywhere, which
+     on an UNREGISTERED custom property means dirtying the whole document's inherited style
+     for nothing. Their channels still exist, they are just read from JS now. */
+  --al-roll-y: 0;
+  --al-tl: 0;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background: var(--ink);
+  -webkit-text-size-adjust: 100%;
+}
+
+body.al {
+  margin: 0;
+  background: var(--ink);
+  color: var(--chalk);
+  font-family: var(--body);
+  font-size: clamp(15px, 1.02vw, 17px);
+  line-height: 1.55;
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+img, svg, canvas { display: block; max-width: 100%; }
+img { height: auto; }
+
+a { color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+}
+.al-shop :focus-visible, .al-hist :focus-visible, .al-cta :focus-visible {
+  outline-color: var(--ink);
+}
+
+.al-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.al-skip {
+  position: fixed; top: 8px; left: 8px; z-index: 80;
+  transform: translateY(-160%);
+  background: var(--red); color: #fff; padding: 15px 18px;
+  font: 500 13px/1 var(--body); letter-spacing: .04em; text-decoration: none;
+  transition: transform .3s var(--ease-o);
+}
+.al-skip:focus-visible { transform: none; }
+
+/* Grain: fixed, pointer-events none, never attached to a scrolling box, so it can
+   never trigger a repaint of the content beneath it. */
+.al-grain {
+  position: fixed; inset: 0; z-index: 60; pointer-events: none;
+  opacity: .05; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- shared type ---------- */
+.al-eye {
+  margin: 0 0 clamp(14px, 1.6vw, 22px);
+  font: 400 clamp(10px, .78vw, 12px)/1 var(--mono);
+  letter-spacing: .26em; text-transform: uppercase; color: var(--slate);
+}
+.al-eye--dark { color: var(--dust); }
+
+.al-h2 {
+  margin: 0;
+  font-family: var(--dsp);
+  font-weight: 500;
+  font-size: clamp(78px, 15.5vw, 260px);
+  line-height: .82;
+  letter-spacing: -.005em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.al-h2--dark { color: var(--chalk); font-size: clamp(52px, 7.6vw, 124px); }
+.al-lead {
+  margin: clamp(18px, 2vw, 30px) 0 0;
+  max-width: 46ch;
+  font-size: clamp(15px, 1.12vw, 19px);
+  line-height: 1.5;
+  color: var(--slate);
+}
+.al-lead--dark { color: #B9B9C0; }
+
+.al-note {
+  margin: 0;
+  font: 400 clamp(10px, .74vw, 11.5px)/1.5 var(--mono);
+  letter-spacing: .12em; text-transform: uppercase; color: var(--slate);
+}
+
+.al-btn {
+  display: inline-flex; align-items: center; gap: 14px;
+  padding: 17px 26px;
+  background: var(--ink); color: var(--paper);
+  font: 500 clamp(12px, .86vw, 14px)/1 var(--body);
+  letter-spacing: .12em; text-transform: uppercase; text-decoration: none;
+  transition: background .45s var(--ease), color .45s var(--ease);
+}
+.al-btn-a {
+  width: 24px; height: 8px; flex: none;
+  background: currentColor;
+  clip-path: polygon(0 44%, 68% 44%, 68% 0, 100% 50%, 68% 100%, 68% 56%, 0 56%);
+  transition: transform .5s var(--ease-o);
+}
+.al-btn:hover { background: var(--red); color: #fff; }
+.al-btn:hover .al-btn-a { transform: translateX(6px); }
+.al-btn--ink { background: var(--ink); color: var(--paper); }
+.al-btn--ink:hover { background: var(--chalk); color: var(--ink); }
+.al-btn--ghost {
+  background: transparent; color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+.al-btn--ghost:hover { background: var(--ink); color: var(--red); }
+
+/* ---------- header ---------- */
+.al-hd {
+  position: fixed; inset: 0 0 auto; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px;
+  padding: clamp(14px, 1.7vw, 24px) var(--gut);
+  color: var(--chalk);
+  /* The header's ink is switched from the section under it rather than blended into it:
+     mix-blend-mode: difference turns the brand red into teal, and a blend cannot be
+     contrast-checked. */
+  transition: transform .55s var(--ease-o), color .35s var(--ease);
+}
+.al-hd[data-theme='light'], .al-hd[data-theme='red'] { color: var(--ink); }
+.al-hd[data-hidden='1'] { transform: translateY(-108%); }
+
+.al-hd-logo, .al-ft-logo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; color: inherit;
+}
+/* the link has to be tappable, not just the artwork inside it */
+.al-hd-logo { padding: 14px 0; margin: -14px 0; }
+.al-mark { width: clamp(20px, 1.7vw, 26px); height: auto; }
+.al-hd-word {
+  font: 700 clamp(15px, 1.15vw, 19px)/1 var(--body);
+  letter-spacing: -.02em;
+}
+.al-hd-word span { font-weight: 400; opacity: .62; }
+
+.al-hd-nav { display: flex; gap: clamp(18px, 2.4vw, 40px); }
+.al-hd-l {
+  position: relative;
+  font: 500 clamp(11px, .82vw, 13px)/1 var(--body);
+  letter-spacing: .14em; text-transform: uppercase; text-decoration: none;
+  padding: 6px 0;
+}
+.al-hd-l::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+  height: 1px; background: currentColor;
+  transform: scaleX(0); transform-origin: 0 50%;
+  transition: transform .5s var(--ease-o);
+}
+.al-hd-l:hover::after, .al-hd-l:focus-visible::after { transform: none; }
+
+.al-burger {
+  display: none;
+  width: 46px; height: 46px; margin: -8px -8px -8px 0;
+  border: 0; background: none; color: inherit; cursor: pointer;
+  position: relative;
+}
+.al-burger-l {
+  position: absolute; left: 11px; width: 24px; height: 1.5px;
+  background: currentColor;
+  transition: transform .5s var(--ease-o), opacity .3s;
+}
+.al-burger-l:nth-child(1) { top: 20px; }
+.al-burger-l:nth-child(2) { top: 26px; }
+.al-burger[aria-expanded='true'] .al-burger-l:nth-child(1) { transform: translateY(3px) rotate(45deg); }
+.al-burger[aria-expanded='true'] .al-burger-l:nth-child(2) { transform: translateY(-3px) rotate(-45deg); }
+
+/* Overlay is a SIBLING of the header: a header with a filter or blend mode becomes the
+   containing block for fixed descendants and the panel would collapse into its box. */
+.al-menu {
+  position: fixed; inset: 0; z-index: 49;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 8px; padding: 0 var(--gut);
+  background: var(--ink);
+  opacity: 0; visibility: hidden;
+  transition: opacity .5s var(--ease), visibility .5s;
+}
+.al-menu[data-open='1'] { opacity: 1; visibility: visible; }
+.al-menu[hidden] { display: none; }
+.al-menu-nav { display: flex; flex-direction: column; }
+.al-menu-l {
+  font-family: var(--dsp); font-weight: 500;
+  font-size: clamp(64px, 22vw, 132px); line-height: .92;
+  text-transform: uppercase; text-decoration: none; color: var(--chalk);
+  padding-top: .1em;
+  transform: translateY(24px); opacity: 0;
+  transition: transform .7s var(--ease-o) calc(var(--i) * 60ms + 80ms),
+              opacity .7s var(--ease-o) calc(var(--i) * 60ms + 80ms),
+              color .3s;
+}
+.al-menu[data-open='1'] .al-menu-l { transform: none; opacity: 1; }
+.al-menu-l:hover { color: var(--red); }
+.al-menu-foot {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: clamp(28px, 5vw, 48px);
+  font: 400 12px/1.6 var(--mono); letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dust);
+}
+.al-menu-foot a { text-decoration: none; color: var(--chalk); }
+
+/* ---------- hero ---------- */
+.al-hero {
+  position: relative;
+  padding: clamp(8px, .9vw, 14px);
+  background: var(--ink);
+}
+.al-hero-frame {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  /* an explicit minmax(0,1fr) column: without it the ticker's max-content track blew the
+     whole grid out to 3593px and every sibling stretched with it */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto auto;
+  padding: clamp(74px, 9vw, 118px) var(--gut) clamp(18px, 2vw, 26px);
+  padding-left: calc(var(--gut) + var(--rail, 0px));
+  box-shadow: inset 0 0 0 1px rgba(246, 244, 241, .16);
+  overflow: hidden;
+}
+@media (min-width: 1024px) { .al-hero-frame { --rail: 42px; } }
+
+/* the film sits inside the frame, graded down so the type owns the light */
+.al-hero-film { position: absolute; inset: 0; overflow: hidden; }
+.al-hero-video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: 50% 76%;
+  transform: scale(calc(1 + var(--al-hx, 0) * .16));
+  filter: brightness(.92) contrast(1.16) saturate(0);
+}
+.al-hero-film::after {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(74% 46% at 30% 44%, rgba(10, 10, 11, .82) 0, rgba(10, 10, 11, .34) 62%, transparent 100%),
+    linear-gradient(rgba(10, 10, 11, .58), rgba(10, 10, 11, .1) 40% 62%, rgba(10, 10, 11, .8));
+}
+
+/* The wave crosses the seam between ALDA and MUSIC: the name is literally carried on it. */
+.al-hero-stage {
+  grid-row: 2;
+  position: relative; z-index: 1;
+  align-self: stretch;
+  min-width: 0;
+}
+.al-markc {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.al-hero-eye::before {
+  content: ''; position: absolute; inset: -20px -40px -20px -30px; z-index: -1;
+  background: radial-gradient(60% 80% at 26% 50%, rgba(10, 10, 11, .8), transparent 100%);
+}
+.al-hero-eye {
+  grid-row: 1;
+  position: relative; z-index: 1; isolation: isolate;
+  margin: 0;
+  font: 400 clamp(10px, .8vw, 12px)/1 var(--mono);
+  letter-spacing: .3em; text-transform: uppercase; color: #C6C6CC;
+  opacity: 0; transform: translateY(10px);
+  animation: al-in .9s var(--ease-o) .15s forwards;
+}
+
+
+.al-hero-bot {
+  grid-row: 3;
+  position: relative; z-index: 1;
+  isolation: isolate;
+  opacity: calc(1 - var(--al-hx, 0) * 1.5);
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: clamp(20px, 3vw, 48px);
+  padding: clamp(24px, 3vw, 44px) 0 clamp(18px, 2.2vw, 30px);
+  min-width: 0;
+}
+.al-hero-lead::before {
+  content: ''; position: absolute; inset: -22px -46px -22px -34px; z-index: -1;
+  background: radial-gradient(64% 72% at 30% 50%, rgba(10, 10, 11, .82), transparent 100%);
+}
+.al-hero-lead {
+  position: relative;
+  max-width: 40ch; margin: 0;
+  font-size: clamp(14px, .95vw, 16.5px); line-height: 1.5;
+  color: #C6C6CC;
+  opacity: 0; transform: translateY(12px);
+  animation: al-in 1s var(--ease-o) .5s forwards;
+}
+
+.al-hero-scroll {
+  position: absolute; left: var(--gut); top: 50%; z-index: 1;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  text-decoration: none;
+  opacity: 0;
+  animation: al-in 1s var(--ease-o) .6s forwards;
+}
+.al-hero-scroll-t {
+  font: 400 clamp(10px, .78vw, 12px)/1 var(--mono);
+  letter-spacing: .3em; text-transform: uppercase; color: var(--chalk);
+  writing-mode: vertical-rl;
+}
+.al-hero-scroll-r {
+  width: 1px; height: clamp(46px, 6vw, 78px);
+  background: linear-gradient(var(--chalk), transparent);
+  transform-origin: 50% 0;
+  animation: al-drop 2.4s var(--ease) infinite;
+}
+
+.al-tk {
+  grid-row: 4;
+  position: relative; z-index: 1;
+  opacity: calc(1 - var(--al-hx, 0) * 1.5);
+  min-width: 0;
+  display: flex; align-items: baseline; gap: clamp(14px, 1.6vw, 24px);
+  padding-top: clamp(14px, 1.6vw, 20px);
+  border-top: 1px solid rgba(246, 244, 241, .16);
+  opacity: 0;
+  animation: al-in 1s var(--ease-o) .8s forwards;
+}
+.al-tk::before {
+  content: ''; position: absolute; inset: 0 calc(var(--gut) * -1) calc(var(--gut) * -1);
+  z-index: -1;
+  background: linear-gradient(rgba(10, 10, 11, .62), rgba(10, 10, 11, .92));
+  backdrop-filter: blur(3px);
+}
+.al-tk-lab {
+  flex: none;
+  font: 400 clamp(10px, .74vw, 11.5px)/1 var(--mono);
+  letter-spacing: .2em; text-transform: uppercase; color: #F0748A;
+}
+.al-tk-win { flex: 1; min-width: 0; overflow: hidden; }
+.al-tk-track {
+  display: flex; width: max-content;
+  animation: al-ticker 46s linear infinite;
+}
+.al-tk-i {
+  display: inline-flex; align-items: baseline; gap: 12px;
+  padding-right: 12px; white-space: nowrap;
+  font-size: clamp(12px, .88vw, 14.5px); color: #B9B9C0;
+}
+.al-tk-i em { font-style: normal; font-weight: 700; color: var(--chalk); }
+.al-tk-i i { color: var(--red); font-style: normal; }
+
+@keyframes al-in { to { opacity: 1; transform: none; } }
+@keyframes al-drop {
+  0% { transform: scaleY(0); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: scaleY(1); opacity: 0; }
+}
+@keyframes al-ticker { to { transform: translate3d(-50%, 0, 0); } }
+
+/* an endless animation nobody can see is pure tax; app.js flips this off screen. Paused is
+   not stopped — the animation holds its position, so scrolling back resumes mid-stride.
+   `!important` earns its place here: every one of these animations is declared with the
+   `animation:` SHORTHAND, which re-sets animation-play-state to running. At equal specificity
+   this rule then wins or loses on source order alone, and it silently lost for the drag hint,
+   which is declared further down. An override that must beat any shorthand anywhere says so. */
+[data-anim='off'],
+[data-anim='off'] span::after { animation-play-state: paused !important; }
+
+/* ---------- marquee band ---------- */
+.al-mq {
+  position: relative;
+  display: grid;
+  background: var(--red);
+  color: var(--ink);
+  padding: clamp(10px, 1.15vw, 16px) 0;
+  overflow: hidden;
+}
+/* driven from app.js: base drift plus scroll velocity, so the bands answer how fast you
+   are reading and reverse when you scroll back up */
+.al-mq-track { display: flex; width: max-content; }
+.al-mq-i { display: inline-flex; align-items: center; gap: clamp(18px, 2vw, 30px); padding-right: clamp(18px, 2vw, 30px); }
+.al-mq-t {
+  font-family: var(--dsp); font-weight: 500;
+  font-size: clamp(34px, 4.6vw, 76px); line-height: .9;
+  letter-spacing: .01em; text-transform: uppercase; white-space: nowrap;
+  padding-top: .08em;
+}
+.al-mq-d { font-size: clamp(11px, 1.05vw, 16px); opacity: .55; }
+/* a duplicated-content marquee must wrap at exactly -50%, never -100% */
+@keyframes al-mq { to { transform: translate3d(-50%, 0, 0); } }
+
+/* ---------- shop rail ---------- */
+.al-shop {
+  position: relative;
+  background: var(--paper); color: var(--ink);
+  padding: var(--band) 0 clamp(52px, 6vw, 88px);
+}
+.al-shop-head { padding: 0 var(--gut); }
+.al-shop-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 20px; padding: clamp(34px, 4vw, 56px) var(--gut) 0;
+}
+
+.al-rail {
+  position: relative;
+  margin-top: clamp(38px, 4.6vw, 68px);
+  padding: 0 var(--gut);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: pan-y;
+}
+.al-rail[data-drag='1'] { cursor: grabbing; }
+/* the transform is written from app.js onto this element */
+.al-rail-track { display: flex; width: max-content; }
+.al-rail-clone { display: flex; }
+.al-tl-track > .al-rail-clone { display: flex; }
+
+.al-rel { flex: none; width: clamp(212px, 20vw, 300px); padding-right: clamp(14px, 1.5vw, 24px); }
+.al-rel-link { display: block; text-decoration: none; color: inherit; }
+
+.al-rel-frame {
+  position: relative; display: block;
+  aspect-ratio: 1; overflow: hidden;
+  background: var(--paper-2);
+}
+.al-rel-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  max-width: none;
+  transform: translate3d(0, 0, 0) scale(1.001);
+  transition: transform .8s var(--ease-o), filter .6s var(--ease);
+  filter: saturate(.92);
+}
+/* the vinyl slides out from behind the sleeve and turns, which is what a record does */
+.al-rel-disc {
+  position: absolute; top: 50%; left: 50%;
+  width: 86%; aspect-ratio: 1;
+  transform: translate(-50%, -50%) translateX(0);
+  transition: transform .85s var(--ease-o);
+  z-index: 0;
+}
+.al-rel-disc-i {
+  position: absolute; inset: 0; border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, var(--paper) 0 5.6%, #0E0E10 5.6% 8.4%, transparent 8.4%),
+    repeating-radial-gradient(circle at 50% 50%, #16161A 0 1.5px, #0B0B0D 1.5px 3px),
+    #0B0B0D;
+  animation: al-spin 2.6s linear infinite paused;
+}
+.al-rel-link:hover .al-rel-disc,
+.al-rel-link:focus-visible .al-rel-disc { transform: translate(-50%, -50%) translateX(46%); }
+.al-rel-link:hover .al-rel-disc-i,
+.al-rel-link:focus-visible .al-rel-disc-i { animation-play-state: running; }
+.al-rel-link:hover .al-rel-img,
+.al-rel-link:focus-visible .al-rel-img { transform: scale(1.03); filter: saturate(1.04); }
+@keyframes al-spin { to { transform: rotate(360deg); } }
+
+.al-rel-meta {
+  display: grid; gap: 5px;
+  padding-top: clamp(14px, 1.5vw, 20px);
+}
+.al-rel-fmt {
+  font: 400 10.5px/1 var(--mono); letter-spacing: .2em;
+  text-transform: uppercase; color: var(--red-deep);
+}
+.al-rel-artist {
+  font-weight: 700; font-size: clamp(14px, 1.02vw, 17px); line-height: 1.2;
+  letter-spacing: -.01em;
+}
+.al-rel-title { font-size: clamp(13px, .92vw, 15px); color: var(--slate); line-height: 1.35; }
+.al-rel-price {
+  margin-top: 4px;
+  font: 400 12.5px/1 var(--mono); letter-spacing: .08em; color: var(--ink);
+}
+
+.al-rail-hint {
+  position: absolute; right: var(--gut); top: -34px;
+  margin: 0;
+  font: 400 10.5px/1 var(--mono); letter-spacing: .22em;
+  text-transform: uppercase; color: var(--slate);
+}
+.al-rail-hint span { position: relative; }
+.al-rail-hint span::after {
+  content: '↔'; margin-left: 10px;
+  display: inline-block;
+  animation: al-nudge 2.8s var(--ease) infinite;
+}
+@keyframes al-nudge {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(5px); }
+}
+
+.al-rule {
+  width: 100%; height: clamp(14px, 1.5vw, 22px);
+  margin-top: clamp(46px, 5.5vw, 78px);
+  color: var(--ink);
+  opacity: .22;
+  /* the rule draws itself across as the section is read */
+  clip-path: inset(0 calc(100% - var(--al-rule, 0) * 100%) 0 0);
+}
+
+/* ---------- the roll: full-bleed portrait stage ---------- */
+.al-roll { position: relative; background: var(--ink); }
+.al-roll-spacer { position: relative; height: calc(100svh + var(--al-roll-travel, 2400px)); }
+.al-roll-vp {
+  position: sticky; top: 0;
+  height: 100svh; overflow: hidden;
+}
+
+/* The current artist IS the section. Plates are stacked full-bleed covers; the arriving
+   one resolves through a quick counter-zoom crossfade, which reads as a hard cut with
+   weight rather than a soft dissolve. */
+.al-roll-stage { position: absolute; inset: 0; }
+.al-plate {
+  position: absolute; inset: 0; margin: 0;
+  opacity: 0;
+  transform: scale(1.045);
+  transition: opacity .42s var(--ease), transform .9s var(--ease-o);
+}
+.al-plate[data-on='1'] { opacity: 1; transform: none; z-index: 1; }
+/* No `will-change: opacity`, and no `content-visibility: hidden`, both measured out:
+   `will-change` promoted all 54 plates permanently. A promoted full-bleed plate is a
+   1170x2532 backing store at dpr3 — 11.8MB of GPU memory each — and it bought nothing the
+   browser does not already do for the ~400ms a plate is actually transitioning. It also
+   carried 25% of every recalculated element in a fling (241,727 vs 322,872 over three
+   interleaved runs).
+   `content-visibility` was worse: 14,000 "added to / removed from layout" records per
+   two-second fling, 74% of ALL style invalidation on the page, and it DOUBLED layout time
+   (70ms against 32ms) rather than saving it. It was there to stop 54 full-bleed portraits
+   painting; since warm() strips `src` from every plate outside the read window there is no
+   longer anything in them to paint. */
+.al-plate img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: 50% 28%;
+  filter: saturate(.82) contrast(1.05) brightness(.92);
+}
+/* one grade over every portrait: evens out 54 different shoots and hides upscaling on
+   the few small archive photos */
+.al-roll-scrim {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(10, 10, 11, .9) 0, rgba(10, 10, 11, .44) 42%, rgba(10, 10, 11, .3) 56%, rgba(10, 10, 11, .82) 88%, rgba(10, 10, 11, .88) 100%),
+    linear-gradient(rgba(10, 10, 11, .62), transparent 26% 70%, rgba(10, 10, 11, .82));
+}
+
+.al-roll-in {
+  position: relative; z-index: 3;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+  align-items: stretch;
+  gap: clamp(24px, 4vw, 72px);
+  padding: clamp(80px, 8vw, 110px) var(--gut) clamp(28px, 3vw, 44px);
+}
+
+.al-roll-left {
+  min-width: 0;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding-bottom: clamp(10px, 2vw, 30px);
+}
+.al-roll-left .al-eye--dark { color: var(--chalk); opacity: .7; }
+
+.al-roll-now {
+  display: grid; grid-template-columns: auto auto; gap: 0 12px;
+  align-items: baseline;
+  margin: clamp(16px, 2vw, 26px) 0 0;
+}
+.al-roll-now-n {
+  font-family: var(--dsp); font-weight: 500;
+  font-size: clamp(96px, 13vw, 224px); line-height: .78;
+  color: var(--red);
+  grid-row: 1;
+  text-shadow: 0 2px 30px rgba(10, 10, 11, .5);
+}
+.al-roll-now-l {
+  font: 400 clamp(10px, .78vw, 12px)/1 var(--mono); letter-spacing: .2em;
+  text-transform: uppercase; color: var(--chalk); opacity: .72;
+  grid-row: 1;
+}
+.al-roll-now-t {
+  grid-column: 1 / -1; grid-row: 2;
+  margin-top: 10px;
+  font-weight: 700; font-size: clamp(17px, 1.4vw, 24px); letter-spacing: -.01em;
+  color: var(--chalk);
+}
+
+.al-wave--roll {
+  position: relative;
+  width: min(100%, 460px);
+  height: clamp(48px, 6vw, 84px);
+  margin-top: clamp(14px, 1.8vw, 24px);
+  left: auto; right: auto; top: auto; transform: none;
+}
+
+.al-roll-right {
+  position: relative; height: 100%; min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
+}
+.al-roll-mark {
+  position: absolute; left: 0; right: 0; top: 50%;
+  height: 0;
+  border-top: 1px solid rgba(223, 63, 92, .55);
+  z-index: 2;
+}
+.al-roll-mark::before, .al-roll-mark::after {
+  content: ''; position: absolute; top: -3.5px;
+  width: 7px; height: 7px; background: var(--red);
+}
+.al-roll-mark::before { left: 0; }
+.al-roll-mark::after { right: 0; }
+
+.al-roll-list {
+  --row: clamp(48px, 5vw, 72px);
+  position: absolute; left: 0; right: 0; top: 50%;
+  margin: 0; padding: 0; list-style: none;
+}
+.al-name {
+  height: var(--row);
+  display: flex; align-items: center;
+}
+.al-name-b {
+  display: flex; align-items: center; gap: clamp(10px, 1.2vw, 18px);
+  width: 100%; height: 100%; padding: 0; border: 0; background: none;
+  color: rgba(246, 244, 241, .38);
+  text-align: left; cursor: pointer;
+  font-family: var(--dsp); font-weight: 500;
+  font-size: clamp(32px, 3.6vw, 56px); line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 2px 22px rgba(10, 10, 11, .82), 0 0 6px rgba(10, 10, 11, .5);
+  transition: color .4s var(--ease), transform .55s var(--ease-o), opacity .4s;
+  transform-origin: 0 50%;
+}
+.al-name-n {
+  flex: none;
+  font: 400 10px/1 var(--mono); letter-spacing: .16em;
+  color: rgba(246, 244, 241, .3);
+  transition: color .4s var(--ease);
+}
+.al-name-t { padding-top: .1em; white-space: nowrap; }
+.al-name-b:hover { color: rgba(246, 244, 241, .82); }
+.al-name[data-on='1'] .al-name-b {
+  color: var(--red);
+  transform: translateX(clamp(6px, .8vw, 14px));
+}
+.al-name[data-on='1'] .al-name-n { color: var(--red); }
+.al-name[data-near='1'] .al-name-b { color: rgba(246, 244, 241, .62); }
+/* idle ripple: after a few seconds without input a dim wave runs down the list, which is
+   the only thing on a static screen that says the column is alive */
+.al-name { transition: opacity .34s var(--ease); }
+.al-roll[data-idle='1'] .al-name { opacity: var(--dim, 1); }
+
+.al-roll-now-t { min-height: 1.2em; }
+
+/* ---------- timeline ---------- */
+.al-hist {
+  position: relative;
+  background: var(--paper); color: var(--ink);
+  padding: var(--band) 0 clamp(72px, 8vw, 120px);
+}
+.al-hist-head { padding: 0 var(--gut); }
+
+.al-tl {
+  position: relative;
+  margin-top: clamp(46px, 5.4vw, 80px);
+  padding: 0 var(--gut);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: pan-y;
+}
+.al-tl[data-drag='1'] { cursor: grabbing; }
+.al-tl-line {
+  position: absolute; left: var(--gut); right: var(--gut); top: 0;
+  height: 1px; background: rgba(10, 10, 11, .16);
+}
+.al-tl-line span {
+  position: absolute; inset: 0 auto 0 0;
+  width: 100%; background: var(--red);
+  transform: scaleX(var(--al-tl-fill, 0)); transform-origin: 0 50%;
+}
+.al-tl-track {
+  display: flex; width: max-content;
+  padding-top: clamp(28px, 3vw, 44px);
+}
+.al-era {
+  flex: none;
+  width: clamp(268px, 27vw, 400px);
+  padding-right: clamp(24px, 3vw, 56px);
+  border-left: 1px solid rgba(10, 10, 11, .16);
+  padding-left: clamp(16px, 1.8vw, 26px);
+}
+.al-era-y {
+  display: block;
+  font: 400 clamp(11px, .84vw, 13px)/1 var(--mono);
+  letter-spacing: .2em;
+  color: var(--slate);
+}
+.al-era[data-on='1'] .al-era-y { color: var(--red-deep); }
+.al-era-tag {
+  display: block; margin-top: 6px;
+  font: 400 10.5px/1 var(--mono); letter-spacing: .2em;
+  text-transform: uppercase; color: var(--red-deep);
+}
+.al-era-h {
+  margin: clamp(14px, 1.6vw, 22px) 0 8px;
+  font-size: clamp(19px, 1.5vw, 25px); line-height: 1.15; letter-spacing: -.015em;
+}
+.al-era-b { margin: 0; font-size: clamp(14px, .96vw, 16px); line-height: 1.55; color: var(--slate); }
+/* ---------- parent band ---------- */
+.al-parent {
+  /* the one full plane of their sign blue on the page, so the colour reads as a
+     colour and not only as the tint in the black */
+  background: var(--blue);
+  padding: clamp(78px, 9vw, 140px) var(--gut);
+  text-align: center;
+}
+.al-parent-h {
+  margin: 0 auto;
+  max-width: 22ch;
+  font-family: var(--dsp); font-weight: 500;
+  font-size: clamp(52px, 8.6vw, 148px); line-height: .86;
+  text-transform: uppercase; color: var(--chalk);
+}
+.al-parent-h > span { display: block; padding-top: .1em; }
+.al-parent-b {
+  margin: clamp(20px, 2.4vw, 32px) auto 0;
+  max-width: 52ch;
+  font-size: clamp(14px, 1.02vw, 17px); color: #B9B9C0;
+}
+.al-parent-l {
+  display: inline-block; margin-top: clamp(20px, 2.2vw, 30px);
+  font: 400 11.5px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase;
+  color: var(--chalk); text-decoration: none;
+  padding-bottom: 5px; box-shadow: inset 0 -1px 0 var(--red);
+  transition: color .4s var(--ease), box-shadow .4s var(--ease);
+}
+.al-parent-l:hover { color: var(--red); box-shadow: inset 0 -1px 0 currentColor; }
+
+/* ---------- CTA ---------- */
+.al-cta {
+  background: var(--red); color: var(--ink);
+  padding: clamp(72px, 9vw, 132px) var(--gut);
+}
+.al-cta-h {
+  margin: 0; max-width: 24ch;
+  font-family: var(--dsp); font-weight: 500;
+  font-size: clamp(60px, 10vw, 176px); line-height: .84;
+  text-transform: uppercase;
+}
+.al-cta-h > span { display: block; padding-top: .1em; }
+.al-cta-b {
+  margin: clamp(20px, 2.4vw, 34px) 0 0;
+  max-width: 44ch;
+  font-size: clamp(15px, 1.08vw, 18px);
+  color: var(--ink);
+}
+.al-cta-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: clamp(28px, 3.4vw, 46px); }
+
+/* ---------- footer ---------- */
+.al-ft {
+  background: var(--ink);
+  padding: clamp(56px, 7vw, 100px) var(--gut) clamp(24px, 3vw, 38px);
+  border-top: 1px solid rgba(246, 244, 241, .12);
+}
+.al-ft-top {
+  display: flex; align-items: center; gap: clamp(20px, 3vw, 44px);
+  padding-bottom: clamp(38px, 4.6vw, 66px);
+}
+.al-ft-top .al-rule { margin: 0; color: var(--red); opacity: .5; clip-path: none; }
+.al-ft-logo { flex: none; }
+
+.al-ft-cols {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(26px, 3.4vw, 54px);
+  padding-bottom: clamp(40px, 5vw, 72px);
+}
+.al-ft-lab {
+  margin: 0 0 14px;
+  font: 400 10.5px/1 var(--mono); letter-spacing: .2em;
+  text-transform: uppercase; color: var(--dust); font-weight: 400;
+}
+.al-ft-addr { margin: 0 0 12px; font-size: 15px; color: #B9B9C0; }
+.al-ft-big {
+  display: inline-block;
+  font-family: var(--dsp); font-weight: 500;
+  font-size: clamp(30px, 3vw, 46px); line-height: .9;
+  text-transform: uppercase; text-decoration: none; color: var(--chalk);
+  padding-top: .08em;
+  transition: color .35s var(--ease);
+}
+.al-ft-big:hover { color: var(--red); }
+.al-ft-mail { display: block; margin-top: 8px; font-size: 15px; color: #B9B9C0; text-decoration: none; }
+.al-ft-mail:hover { color: var(--chalk); }
+.al-ft-hours { margin: 0; display: grid; gap: 8px; }
+.al-ft-hours div { display: flex; justify-content: space-between; gap: 14px; font-size: 14px; }
+.al-ft-hours dt { color: #B9B9C0; }
+.al-ft-hours dd { margin: 0; font-family: var(--mono); font-size: 12.5px; letter-spacing: .06em; }
+.al-ft-soc { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.al-ft-soc a { font-size: 15px; color: #B9B9C0; text-decoration: none; }
+.al-ft-soc a:hover { color: var(--chalk); }
+
+.al-ft-base {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: 18px;
+  padding-top: clamp(20px, 2.4vw, 30px);
+  border-top: 1px solid rgba(246, 244, 241, .12);
+}
+.al-ft-legal { display: flex; flex-wrap: wrap; gap: 18px; margin: 0; padding: 0; list-style: none; }
+.al-ft-legal a {
+  font: 400 10.5px/1 var(--mono); letter-spacing: .16em;
+  text-transform: uppercase; color: var(--dust); text-decoration: none;
+}
+.al-ft-legal a:hover { color: var(--chalk); }
+.al-ft-credit {
+  margin: 0; max-width: 62ch;
+  font: 400 10.5px/1.7 var(--mono); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dust);
+}
+
+/* ---------- scrubbed reveals ---------- */
+/* --rv is read only by the element it is set on, so it is declared NON-INHERITING.
+   Custom properties inherit by default, and that is the expensive part: writing --rv on a
+   reveal container told the style engine that every descendant might depend on it, so all of
+   them were recomputed. These containers hold the split headings, hundreds of per-character
+   spans, so ~800 elements were recalculated on every scroll frame -- a fifth of the document,
+   and the largest single cost on a phone. Declared this way the write invalidates one
+   element. Nothing else reads --rv, so nothing loses a value it was using. */
+@property --rv {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+[data-rv] {
+  --rv: 0;
+  opacity: calc(.08 + var(--rv) * .92);
+  transform: translate3d(0, calc((1 - var(--rv)) * 30px), 0);
+}
+[data-rv].has-focus { --rv: 1 !important; }
+.al-hero-bot:focus-within, .al-tk:focus-within { opacity: 1; }
+
+/* ---------- breakpoints ---------- */
+@media (max-width: 1023px) {
+  .al-hd-nav { display: none; }
+  .al-burger { display: block; }
+  .al-hero-bot { flex-direction: column; align-items: flex-start; }
+  .al-hero-lead { max-width: 34ch; }
+  .al-hero-scroll { display: none; }
+
+  /* the roll stacks: heading and counter above, the names column filling what is left.
+     No align-content here — it collapses the 1fr row and the list, which anchors at 50%
+     of that row, rides up over the heading. */
+  .al-roll-in {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: clamp(10px, 2.4vw, 20px);
+    padding-top: clamp(72px, 16vw, 96px);
+  }
+  .al-roll-right { min-height: 0; }
+  .al-roll-left { justify-content: flex-start; padding-bottom: 0; }
+  /* the masked heading box clips horizontally as well as vertically, so at 390px
+     "LISTAFÓLK" was cut to "LISTAF"; nowrap names have to fit the narrow column too */
+  .al-roll .al-h2--dark { font-size: clamp(32px, 9.6vw, 58px); }
+  .al-roll-now-n { font-size: clamp(58px, 16vw, 100px); }
+  .al-wave--roll { display: none; }
+  /* 44px minimum: the roster rows measured 24px on a 390px screen, so 54 of the page's
+     tap targets were unhittable. The roll shows fewer names at once as a result, which is
+     the right trade. */
+  .al-roll-list { --row: 46px; }
+  .al-name-b { font-size: clamp(20px, 5.6vw, 32px); gap: 10px; }
+
+  .al-ft-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .al-ft-top .al-rule { display: none; }
+}
+
+@media (max-width: 599px) {
+  .al-ft-cols { grid-template-columns: minmax(0, 1fr); }
+  .al-shop-foot { flex-direction: column; align-items: flex-start; }
+  .al-rail-hint { position: static; margin-bottom: 14px; }
+  .al-tl-line { display: none; }
+}
+
+/* ---------- reduced motion: everything at rest, nothing hidden ---------- */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001s !important; animation-iteration-count: 1 !important; }
+  .al-tk-track, .al-rel-disc-i, .al-hero-scroll-r,
+  .al-rail-hint span::after { animation: none !important; }
+  .al-hero-eye, .al-hero-lead, .al-hero-scroll, .al-tk { opacity: 1; transform: none; }
+  [data-rv] { opacity: 1 !important; transform: none !important; }
+  .al-rule { clip-path: none !important; }
+  /* the roll flattens: one viewport, the names become a normal scrollable column, and
+     choosing an artist is a click instead of a scroll position */
+  .al-roll-spacer { height: auto; }
+  .al-roll-vp { position: static; height: 100svh; }
+  .al-roll-list { position: static; transform: none !important; }
+  .al-roll-right {
+    overflow-y: auto; -webkit-mask-image: none; mask-image: none;
+    padding-right: 8px;
+  }
+  .al-roll-mark { display: none; }
+  .al-name-b { color: rgba(246, 244, 241, .82); }
+  .al-plate { transition: none; transform: none; }
+  .al-plate:not([data-on='1']) { display: none; }
+  .al-plate[data-on='1'] { opacity: 1; }
+  .al-rail-track, .al-tl-track { transform: none !important; }
+  .al-rail, .al-tl { overflow-x: auto; scroll-snap-type: x mandatory; }
+  .al-rel, .al-era { scroll-snap-align: start; }
+  .al-rail-clone { display: none; }
+}
+
+/* ---------- drag cursor on the rails ---------- */
+.al-cur {
+  position: absolute; left: 0; top: 0; z-index: 5;
+  width: 0; height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .35s var(--ease);
+}
+.al-cur[data-on='1'] { opacity: 1; }
+.al-cur i {
+  position: absolute; top: -5px;
+  width: 10px; height: 10px;
+  background: var(--red);
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+  transition: transform .5s var(--ease-o);
+}
+.al-cur i:first-child { left: -30px; }
+.al-cur i:last-child { left: 20px; transform: scaleX(-1); }
+.al-cur[data-on='1'] i:first-child { transform: translateX(-4px); }
+.al-cur[data-on='1'] i:last-child { transform: scaleX(-1) translateX(-4px); }
+[data-drag='1'] .al-cur i:first-child { transform: translateX(-11px); }
+[data-drag='1'] .al-cur i:last-child { transform: scaleX(-1) translateX(-11px); }
+@media (prefers-reduced-motion: reduce) { .al-cur { display: none; } }
+
+/* film: reduced motion gets the poster, no playing video */
+@media (prefers-reduced-motion: reduce) {
+  .al-hero-video { display: none; }
+  .al-hero-film { background: url('img/brand/wave-poster.webp') center / cover no-repeat; }
+}
+
+/* ---------- the wordmark canvas + the opening sequence ---------- */
+/* The film outside the letters is dropped to near black by the canvas itself, so the frame
+   only needs a faint bed for the letters to sit in. */
+.al-hero-film { opacity: .16; }
+
+/* Chrome enters after the title sequence resolves. Keyed off a body class rather than
+   per-element delays so the intro can be skipped in one place. */
+.al .al-hero-eye,
+.al .al-hero-bot,
+.al .al-tk,
+.al .al-hero-scroll {
+  animation: none;
+  opacity: 1;
+  transition: opacity .7s var(--ease-o) var(--d, 0s), transform .8s var(--ease-o) var(--d, 0s);
+}
+.al-intro .al-hero-eye,
+.al-intro .al-hero-bot,
+.al-intro .al-tk,
+.al-intro .al-hero-scroll {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.al .al-hd, .al .al-grain { transition: opacity .8s var(--ease-o) .1s; }
+.al-hero-bot { --d: .06s; }
+.al-tk { --d: .14s; }
+.al-hero-scroll { --d: .2s; }
+
+/* the frame's hairline draws itself around the plate as the sequence lands */
+.al-hero-frame::after {
+  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(246, 244, 241, .16);
+  opacity: 1;
+  transition: opacity .9s var(--ease-o) .1s;
+}
+.al-intro .al-hero-frame::after { opacity: 0; }
+.al-hero-frame { box-shadow: none; }
+
+/* body scroll is held only while the sequence runs */
+.al-intro { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .al-intro { overflow: visible; }
+  .al-intro .al-hero-eye, .al-intro .al-hero-bot, .al-intro .al-tk,
+  .al-intro .al-hero-scroll { opacity: 1; transform: none; }
+  .al-intro .al-hero-frame::after { opacity: 1; }
+}
+
+/* ================= the scroll system =================
+   Rebuilt from houseofyellow.nl at source level: measured rows of characters that rise from
+   a masked line with a per-index delay, a hairline rail per line carrying that line's share
+   of the block's progress, and a quantised odometer that steps between values. */
+
+.al-split { display: block; }
+.al-probe { display: block; }
+
+/* The mask box is PADDED, which is what lets Icelandic accents survive a clipped line
+   reveal: Í Á Ó Ú Ý sit above the cap line and a bare overflow:hidden shears them off. */
+.al-row {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  padding-top: .2em;
+  margin-top: -.2em;
+}
+.al-row-i { display: block; }
+
+.al-ch {
+  display: inline-block;
+  transform: translateY(102%) rotate(2deg);
+  opacity: 0;
+  transition:
+    transform .74s cubic-bezier(.16, 1, .3, 1) calc(var(--i) * 17ms),
+    opacity .5s linear calc(var(--i) * 17ms);
+}
+.is-in .al-ch { transform: none; opacity: 1; }
+
+/* a body paragraph reveals by the line, not by the letter: 300 staggered characters reads
+   as noise at 15px */
+.al-lead .al-ch, .al-parent-b .al-ch {
+  transition:
+    transform .8s cubic-bezier(.16, 1, .3, 1) calc(var(--i) * 4ms),
+    opacity .55s linear calc(var(--i) * 4ms);
+}
+
+.al-row-rail {
+  position: absolute; left: 0; right: 0; bottom: .1em;
+  height: 1px;
+  background: currentColor;
+  opacity: .16;
+}
+.al-row-rail > i {
+  position: absolute; inset: 0;
+  display: block;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+
+/* the odometer: one item tall, the strip steps by whole items */
+.al-odo {
+  position: relative;
+  overflow: hidden;
+  margin: 0 var(--gut) clamp(18px, 2vw, 30px);
+  font-family: var(--dsp); font-weight: 500;
+  font-size: clamp(90px, 15vw, 250px);
+  line-height: .8;
+  color: var(--ink);
+}
+.al-odo-strip { display: block; }
+.al-odo-i {
+  display: block;
+  line-height: .8;
+  padding-top: .12em;
+  color: rgba(10, 10, 11, .18);
+  transition: color .5s var(--ease);
+}
+.al-odo-i[data-on='1'] { color: var(--red-deep); }
+
+/* the vinyl rotates with the section's own pass through the viewport */
+.al-rel-disc-i { animation: none; transform: rotate(var(--al-spin, 0deg)); }
+.al-rel-link:hover .al-rel-disc-i,
+.al-rel-link:focus-visible .al-rel-disc-i { animation: none; }
+
+/* Phones reveal by the LINE, not by the letter.
+   The per-character stagger is the effect on a wide screen, but its cost is one independently
+   transitioning element per character: 341 of them, each with transition-delay
+   calc(var(--i) * 17ms), so a heading keeps hundreds of elements in flight for close to six
+   seconds and every one of them needs a style recalc on every frame of it. Measured at ~700
+   elements recalculated per pass during a scroll, which was 45% of the frame and the single
+   largest cost on mobile. The row already has the padded mask that protects Í Á Ó Ú Ý, so
+   moving the reveal up one level is the same motion with 21 animated elements instead of 341.
+   The stylesheet already makes this argument for body copy a few rules up -- 300 staggered
+   characters read as noise at 15px -- and at 390px wide that is true of the headings too. */
+@media (max-width: 700px) {
+  .al-row-i {
+    display: block;
+    transform: translateY(102%) rotate(1.2deg);
+    opacity: 0;
+    transition:
+      transform .74s cubic-bezier(.16, 1, .3, 1),
+      opacity .5s linear;
+  }
+  .is-in .al-row-i { transform: none; opacity: 1; }
+  /* the characters stop being animated things and become plain text inside the moving line */
+  .al-ch,
+  .al-lead .al-ch,
+  .al-parent-b .al-ch {
+    transform: none;
+    opacity: 1;
+    transition: none;
+  }
+  /* keep the line-to-line cascade: the rows stagger instead of the letters */
+  .al-row:nth-child(2) .al-row-i { transition-delay: .07s; }
+  .al-row:nth-child(3) .al-row-i { transition-delay: .14s; }
+  .al-row:nth-child(4) .al-row-i { transition-delay: .21s; }
+  .al-row:nth-child(5) .al-row-i { transition-delay: .28s; }
+  .al-row:nth-child(n+6) .al-row-i { transition-delay: .35s; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .al-ch { transform: none !important; opacity: 1 !important; transition: none !important; }
+  .al-row-i { transform: none !important; opacity: 1 !important; transition: none !important; }
+  .al-row-rail > i { transform: scaleX(1); }
+  .al-odo { height: auto !important; }
+  .al-odo-strip { transform: none !important; }
+  .al-odo-i { color: var(--red-deep); }
+  .al-odo-i:not([data-on='1']) { display: none; }
+  .al-rel-disc-i { transform: none; }
+}
+
+/* archive portraits: a contained plate at close to its own pixels, over an out-of-focus
+   wash of the same frame so the section still fills edge to edge */
+.al-plate[data-archive] { display: grid; place-items: center; }
+.al-plate[data-archive]::before {
+  content: ''; position: absolute; inset: 0;
+  background: var(--al-bg) center / cover no-repeat;
+  /* The wash is a 40px source, so it arrives blurred; this is a finishing pass, not
+     the blur itself. A 38px radius over 47 full-viewport plates was the single
+     largest frame cost on this page. */
+  filter: blur(9px) saturate(.4) brightness(.4);
+  transform: scale(1.06);
+}
+.al-plate[data-archive] img {
+  position: relative;
+  width: auto; height: auto;
+  max-width: min(52vw, var(--al-natw));
+  max-height: 74svh;
+  object-fit: contain;
+  box-shadow: 0 0 0 1px rgba(246, 244, 241, .12);
+}
+
+/* ================= the stack =================
+   The panel being left behind recedes toward the top edge; the one arriving lags below its
+   layout position and catches up. Together they read as plates sliding over each other,
+   which is what the hard cuts between sections were missing. */
+.al-shop, .al-hist, .al-parent, .al-cta, .al-ft {
+  --al-exit: 0;
+  --al-enter: 0;
+  position: relative;
+  transform-origin: 50% 0;
+  transform:
+    translate3d(0, calc(var(--al-enter) * 9vh + var(--al-exit) * -7vh), 0)
+    scale(calc(1 - var(--al-exit) * .075));
+  border-radius: calc(var(--al-exit) * 22px);
+  overflow: clip;
+}
+/* the leaving panel dims from its own top edge, so the incoming ground reads as nearer */
+.al-shop::after, .al-hist::after, .al-parent::after, .al-cta::after {
+  content: ''; position: absolute; inset: 0; z-index: 40; pointer-events: none;
+  background: var(--ink);
+  /* Ramped late and capped: at a linear .58 the rail's own metadata was still on screen and
+     already dimmed past AA (measured 1.0:1 through the overlay). The recede should read as
+     depth, not as a scrim over readable content. */
+  opacity: calc(var(--al-exit) * var(--al-exit) * .34);
+}
+/* stacking order: later panels pass over earlier ones */
+.al-shop { z-index: 2; }
+.al-roll { z-index: 3; }
+.al-hist { z-index: 4; }
+.al-parent { z-index: 5; }
+.al-cta { z-index: 6; }
+.al-ft { z-index: 7; }
+
+/* the release cards each lag a touch more than the last: depth in the row */
+.al-rel {
+  transform: translate3d(0, calc(var(--al-cardp, 0) * (var(--n, 0) * 1.6px + 6px)), 0);
+}
+.al-rel-frame { will-change: transform; }
+
+/* the parent headline spreads as it passes: the band opens up rather than just arriving */
+.al-parent-h {
+  letter-spacing: calc(-.01em + (1 - var(--al-enter, 0)) * .012em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .al-shop, .al-hist, .al-parent, .al-cta, .al-ft {
+    transform: none !important; border-radius: 0 !important; overflow: visible !important;
+  }
+  .al-shop::after, .al-hist::after, .al-parent::after, .al-cta::after { display: none; }
+  .al-rel { transform: none !important; }
+  .al-parent-h { letter-spacing: -.01em; }
+}
+
+/* ================= the loader =================
+   Their wordmark painting itself in, block by block, then flying to the header. The dissolve
+   is a grid of ink cells over the identical artwork the header will show, removed in a
+   seeded order: their mark is 8-bit, so the reveal is pixels resolving, not a fade. */
+.al-load {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center;
+  background: var(--ink);
+  transition: opacity .5s var(--ease) .25s, visibility .5s .25s;
+}
+.al-load[data-done='1'] { opacity: 0; visibility: hidden; }
+.al-load-in { display: grid; justify-items: center; gap: clamp(22px, 3vw, 38px); width: min(74vw, 780px); }
+
+.al-load-lock {
+  position: relative;
+  width: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.al-lock { width: 100%; height: auto; }
+.al-lock--load { display: block; color: var(--chalk); }
+
+/* the cells sit ON the artwork and are taken away, so nothing about the letterforms is
+   redrawn or approximated */
+.al-load-grid {
+  position: absolute; inset: -2% -1%;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+}
+.al-load-grid i {
+  display: block;
+  background: var(--ink);
+  transition: opacity .32s linear var(--d, 0s);
+}
+.al-load-grid i[data-off='1'] { opacity: 0; }
+
+.al-load-bar {
+  position: relative;
+  width: min(38%, 260px); height: 1px;
+  background: rgba(246, 244, 241, .18);
+}
+.al-load-bar i {
+  position: absolute; inset: 0;
+  background: var(--red);
+  transform: scaleX(var(--p, 0)); transform-origin: 0 50%;
+}
+
+/* the header target: identical artwork, so the flight is a pure scale and translate */
+.al-hd-logo .al-lock { width: clamp(132px, 11.5vw, 176px); }
+.al-ft-logo .al-lock--ft { width: clamp(168px, 15vw, 232px); }
+.al-hd-logo, .al-ft-logo { display: block; }
+.al-hd-logo[data-waiting='1'] { opacity: 0; }
+
+body.al-loading { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .al-load { display: none; }
+  body.al-loading { overflow: visible; }
+}
+
+/* the lattice sits between the film and the letters */
+.al-lattice {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) { .al-lattice { display: none; } }
+
+/* ---------- touch targets ----------
+   Measured on a 390x844 phone: footer links sat at 16-29px and the skip link landed 1px
+   short of 44. Padding is added rather than font size, so nothing about the layout moves. */
+@media (max-width: 1023px) {
+  .al-skip { padding: 16px 18px; }
+  .al-parent-l { padding: 16px 0 17px; }
+  .al-ft-logo { padding: 11px 0; margin: -11px 0; }
+  .al-ft-big { padding: 9px 0 10px; }
+  .al-ft-mail { padding: 11px 0; display: inline-block; }
+  .al-ft-soc { gap: 0; }
+  .al-ft-soc a { display: inline-block; padding: 14px 0; }
+  .al-ft-legal { gap: 4px 18px; }
+  .al-ft-legal a { display: inline-block; padding: 16px 0 17px; }
+  /* "X" is a one-character link: a 10px-wide target needs horizontal room too */
+  .al-ft-soc a { padding: 14px 12px 14px 0; min-width: 44px; }
+  .al-ft-hours dd, .al-ft-hours dt { padding: 4px 0; }
+}
+
 /* =============================================================================
-   12 TÓNAR — spec redesign
-   Every selector is prefixed t12- so this stylesheet can never bleed into another
-   build, and every keyframe is prefixed for the same reason (a shared @keyframes
-   name has silently frozen another page's marquee before).
+   12 Tónar additions to the transplanted system.
    ============================================================================= */
 
-@font-face{font-family:'OG';src:url(fonts/OverusedGrotesk-Book.woff2) format('woff2');font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:'OG';src:url(fonts/OverusedGrotesk-Medium.woff2) format('woff2');font-weight:500;font-style:normal;font-display:swap}
-@font-face{font-family:'OG';src:url(fonts/OverusedGrotesk-Bold.woff2) format('woff2');font-weight:700;font-style:normal;font-display:swap}
-@font-face{font-family:'OG';src:url(fonts/OverusedGrotesk-Black.woff2) format('woff2');font-weight:900;font-style:normal;font-display:swap}
-@font-face{font-family:'MM';src:url(fonts/MartianMono-500.woff2) format('woff2');font-weight:500;font-style:normal;font-display:swap}
-@font-face{font-family:'MM';src:url(fonts/MartianMono-700.woff2) format('woff2');font-weight:700;font-style:normal;font-display:swap}
+/* Lenis (1.3.25) — smooth wheel only, stepped from the page's own rAF loop so the two
+   cannot both hold a frame open. syncTouch stays off: damping is what turns discrete
+   wheel notches into motion, and on a finger it is just content refusing to be where
+   you put it. */
+html.lenis, html.lenis body { height: auto; }
+html.lenis { scroll-behavior: auto; }
+.lenis:not(.lenis-autoToggle).lenis-stopped { overflow: clip; }
+.lenis [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-smooth iframe { pointer-events: none; }
 
-:root{
-  /* Sampled from 12 Tónar's own logo file: #F9F500 is 45.5% of its pixels and
-     #000000 is 20.9%. The blue is the sign's keyline and type. */
-  --t12-yellow:#F9F500;
-  --t12-ink:#122476;
-  --t12-live:#284ADF;
-  --t12-black:#0A0A0A;
-  --t12-paper:#FBFAF4;
+/* ---------- the record coming out of the sleeve ----------
+   The rail already slid the disc out and spun it. What it did not do is make the
+   SLEEVE react: the detail that sells the gesture is the jacket recoiling on a
+   tighter, faster curve than the record leaves on, so the two read as one movement
+   with a cause. Adopted from 21st.dev's Vinyl Album Card (@saurabh-2607); only the
+   two opposed channels and their relative weights are taken. */
+.al-rel-link:hover .al-rel-img,
+.al-rel-link:focus-visible .al-rel-img {
+  transform: translate3d(-6px, 0, 0) rotate(-2deg) scale(1.03);
+  filter: saturate(1.04);
+}
+.al-rel-frame { overflow: visible; }
+.al-rel-img { border-radius: 1px; }
+.al-rel { position: relative; z-index: 1; }
+.al-rel:hover, .al-rel:focus-within { z-index: 3; }
 
-  --t12-ground:var(--t12-yellow);
-  --t12-fg:var(--t12-ink);
-  --t12-rule:color-mix(in srgb, var(--t12-ink) 26%, transparent);
+/* ---------- the roll names the record, not just the artist ----------
+   A plate here is an album cover rather than a portrait, so the now-block carries the
+   sleeve's title underneath the name. */
+.al-roll-now-r {
+  grid-column: 1 / -1; grid-row: 3;
+  margin-top: 5px; min-height: 1.3em;
+  font: 400 clamp(11px, .85vw, 13px)/1.35 var(--mono);
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--dust);
+}
+/* The accuracy line, on the section itself: these are records the shop SELLS. */
+.al-roll-note {
+  margin: clamp(18px, 2.2vw, 30px) 0 0; max-width: 42ch;
+  font: 400 clamp(10px, .74vw, 11.5px)/1.6 var(--mono);
+  letter-spacing: .1em; text-transform: uppercase; color: var(--dust);
+  padding-left: 12px; box-shadow: inset 2px 0 0 var(--red);
+}
+@media (max-width: 900px) { .al-roll-note { display: none; } }
 
-  --t12-gut:clamp(18px,4vw,64px);
-  --t12-max:1520px;
-  --t12-sec:clamp(84px,11vw,168px);
-
-  --t12-disp:'OG',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
-  --t12-mono:'MM',ui-monospace,'SF Mono',Menlo,monospace;
+/* ---------- the label band ---------- */
+.al-parent-guard {
+  margin: clamp(16px, 1.8vw, 24px) auto 0; max-width: 52ch;
+  font: 400 clamp(10px, .74vw, 11.5px)/1.7 var(--mono);
+  letter-spacing: .1em; text-transform: uppercase; color: var(--dust);
 }
 
-*,*::before,*::after{box-sizing:border-box}
-html,body{margin:0;padding:0}
-.t12-html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-
-/* Lenis (v1.3.25) requires these; inlined rather than shipping a second stylesheet.
-   `scroll-behavior: smooth` and Lenis fight each other, so the class turns it off. */
-html.lenis,html.lenis body{height:auto}
-html.lenis{scroll-behavior:auto}
-.lenis:not(.lenis-autoToggle).lenis-stopped{overflow:clip}
-.lenis [data-lenis-prevent]{overscroll-behavior:contain}
-.lenis.lenis-smooth iframe{pointer-events:none}
-
-/* One curve for every hover on the page, so the whole thing reads as one hand.
-   Expo-out: leaves instantly, arrives without a bounce. */
-:root{--t12-ease:cubic-bezier(.19,1,.22,1)}
-
-/* ------------------------------------------------------------- the roll-up ---
-   Two copies of the label; the resting one leaves upward as the second arrives
-   from below. The clip box is padded so Í Á Ó Ú Ý are not sheared off, and the
-   second copy is aria-hidden so it is never read twice. */
-.t12-roll{position:relative;display:inline-block;overflow:hidden;vertical-align:top;
-  padding-top:.16em;margin-top:-.16em}
-.t12-roll>span{display:block;transition:transform .46s var(--t12-ease)}
-.t12-roll>span+span{position:absolute;left:0;top:.16em;transform:translateY(105%)}
-@media (hover:hover){
-  :is(a,li):hover>.t12-roll>span:first-child,
-  :is(a,li):focus-visible>.t12-roll>span:first-child{transform:translateY(-105%)}
-  :is(a,li):hover>.t12-roll>span+span,
-  :is(a,li):focus-visible>.t12-roll>span+span{transform:translateY(0)}
+/* ---------- footer additions ---------- */
+.al-ft-hnote {
+  margin: 12px 0 0; max-width: 30ch;
+  font: 400 10px/1.6 var(--mono); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dust); opacity: .8;
 }
-.t12-body{
-  background:var(--t12-ground);color:var(--t12-fg);
-  font-family:var(--t12-disp);font-weight:400;font-size:clamp(16px,1.05vw,18px);
-  line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden;
-  transition:background-color .5s ease,color .5s ease;
-}
-img{display:block;max-width:100%;height:auto}
-a{color:inherit}
-button{font:inherit;color:inherit}
-h1,h2,h3,p,ul,ol,figure,table{margin:0;padding:0}
-ul,ol{list-style:none}
-
-:where(a,button,input,textarea,[tabindex]):focus-visible{
-  outline:3px solid var(--t12-live);outline-offset:3px;border-radius:2px;
-}
-[data-theme=ink] :where(a,button,input,textarea,[tabindex]):focus-visible{outline-color:var(--t12-yellow)}
-
-.t12-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
-  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
-.t12-skip{position:absolute;left:-9999px;top:0;z-index:120;background:var(--t12-ink);
-  color:var(--t12-yellow);padding:14px 20px;font-weight:700}
-.t12-skip:focus{left:8px;top:8px}
-
-/* ---------------------------------------------------------------- grounds --- */
-[data-theme=sign]{--t12-ground:var(--t12-yellow);--t12-fg:var(--t12-ink);
-  --t12-rule:color-mix(in srgb,var(--t12-ink) 26%,transparent)}
-[data-theme=paper]{--t12-ground:var(--t12-paper);--t12-fg:var(--t12-ink);
-  --t12-rule:color-mix(in srgb,var(--t12-ink) 18%,transparent)}
-[data-theme=ink]{--t12-ground:var(--t12-ink);--t12-fg:var(--t12-paper);
-  --t12-rule:color-mix(in srgb,var(--t12-yellow) 34%,transparent)}
-main>section{background:var(--t12-ground);color:var(--t12-fg);position:relative;isolation:isolate}
-.t12-wrap{max-width:var(--t12-max);margin-inline:auto;padding-inline:var(--t12-gut);position:relative}
-
-/* ---------------------------------------------- the twelve-column rule ------
-   Twelve is the shop's name, so the grid is allowed to be visible. It is laid
-   INSIDE each section, above that section's ground but below its content, so it
-   never draws a line across a photograph or a record sleeve. */
-.t12-grid{position:absolute;inset:0;z-index:0;pointer-events:none;
-  display:grid;grid-template-columns:repeat(6,1fr);
-  max-width:var(--t12-max);margin-inline:auto;padding-inline:var(--t12-gut);
-  opacity:.5}
-.t12-grid i{border-left:1px solid var(--t12-rule)}
-.t12-grid i:last-child{border-right:1px solid var(--t12-rule)}
-@media (min-width:760px){.t12-grid{grid-template-columns:repeat(12,1fr)}}
-@media print{.t12-grid{display:none}}
-/* A positioned element paints above a static one regardless of DOM order, so every
-   sibling of the rule needs its own stacking position or the rule wins. */
-main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-index:1}
-
-/* --------------------------------------------------------------- header ----- */
-.t12-head{
-  position:fixed;top:0;left:0;right:0;z-index:60;
-  display:grid;grid-template-columns:auto 1fr auto;align-items:center;
-  gap:clamp(10px,2vw,28px);
-  padding:12px var(--t12-gut);
-  background:color-mix(in srgb,var(--t12-ground) 88%,transparent);
-  backdrop-filter:blur(14px) saturate(1.1);
-  border-bottom:1px solid var(--t12-rule);
-  color:var(--t12-fg);
-  transition:background-color .45s ease,color .45s ease,border-color .45s ease;
-}
-.t12-head-mark{display:block;line-height:0;flex:none}
-.t12-head-mark img{width:clamp(92px,9vw,124px);height:auto;border:1.5px solid currentColor}
-.t12-head-nav{display:none;gap:clamp(14px,1.7vw,30px);font-weight:500;font-size:14px}
-.t12-head-nav a{text-decoration:none;position:relative;padding:6px 0;white-space:nowrap}
-.t12-head-nav a::after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;
-  background:currentColor;transform:scaleX(0);transform-origin:0 50%;
-  transition:transform .42s var(--t12-ease)}
-.t12-head-nav a:hover::after,.t12-head-nav a:focus-visible::after{transform:scaleX(1)}
-.t12-head-tel{display:none;font-family:var(--t12-mono);font-size:12px;font-weight:700;
-  text-decoration:none;border:1.5px solid currentColor;padding:8px 12px}
-/* burger: two rules that become an X, in the sign's own vocabulary */
-.t12-burger{display:grid;place-items:center;width:46px;height:46px;background:none;
-  border:1.5px solid currentColor;cursor:pointer;justify-self:end;padding:0}
-
-/* This block must sit AFTER the base rules it overrides: at equal specificity the
-   cascade is decided by source order, not by the media query being "more specific". */
-@media (min-width:1080px){
-  .t12-head{grid-template-columns:auto 1fr auto auto}
-  .t12-head-nav{display:flex;justify-self:end}
-  .t12-head-tel{display:inline-block}
-  .t12-burger{display:none}
-}
-.t12-burger-b{display:block;width:20px;height:12px;position:relative}
-.t12-burger-b i{position:absolute;left:0;right:0;height:2px;background:currentColor;
-  transition:transform .34s cubic-bezier(.2,.7,.2,1),opacity .2s ease}
-.t12-burger-b i:first-child{top:0}
-.t12-burger-b i:last-child{bottom:0}
-.t12-burger[aria-expanded=true] .t12-burger-b i:first-child{transform:translateY(5px) rotate(45deg)}
-.t12-burger[aria-expanded=true] .t12-burger-b i:last-child{transform:translateY(-5px) rotate(-45deg)}
-
-/* The overlay is a SIBLING of the header, never a child: backdrop-filter makes an
-   element the containing block for its fixed descendants, which collapses an overlay
-   rendered inside it to the header's own box. */
-.t12-menu{position:fixed;inset:0;z-index:59;background:var(--t12-ink);color:var(--t12-yellow);
-  display:flex;flex-direction:column;justify-content:center;gap:8vh;
-  padding:calc(76px + env(safe-area-inset-top)) var(--t12-gut) calc(28px + env(safe-area-inset-bottom));
-  opacity:0;transition:opacity .32s ease}
-.t12-menu[hidden]{display:none}
-.t12-menu.is-on{opacity:1}
-.t12-menu nav{display:flex;flex-direction:column;gap:2px}
-.t12-menu nav a{text-decoration:none;font-weight:900;letter-spacing:-.02em;
-  font-size:clamp(34px,9vw,64px);line-height:1.16;overflow:hidden;
-  padding-top:.16em;margin-top:-.16em}
-.t12-menu nav a span{display:block;transform:translateY(105%);
-  transition:transform .55s cubic-bezier(.16,.84,.28,1);transition-delay:calc(var(--i) * 55ms + 80ms)}
-.t12-menu.is-on nav a span{transform:none}
-.t12-menu-foot{font-family:var(--t12-mono);font-size:12px;line-height:2;
-  border-top:1px solid color-mix(in srgb,var(--t12-yellow) 34%,transparent);padding-top:16px}
-.t12-menu-foot a{display:inline-block;text-decoration:none;border-bottom:1px solid currentColor}
-.t12-body.t12-lock{overflow:hidden}
-
-/* ------------------------------------------------------------------ type ---- */
-.t12-tone{display:flex;align-items:baseline;gap:12px;font-family:var(--t12-mono);
-  font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
-.t12-tone-n{border:1.5px solid currentColor;padding:3px 7px 2px;line-height:1}
-.t12-tone-k{opacity:.72}
-
-/* Icelandic acutes sit high above the cap, so multi-line display type needs real
-   leading and the line mask needs padding, or Í Á Ó Ú Ý get sheared off. */
-.t12-h2{font-weight:900;letter-spacing:-.028em;line-height:1.1;
-  font-size:clamp(32px,4.4vw,62px);margin-top:.5em;max-width:19ch;text-wrap:balance}
-.t12-h2--big{font-size:clamp(38px,7vw,104px);line-height:1.06;max-width:14ch}
-.t12-ln{display:block;overflow:hidden;padding-top:.18em;margin-top:-.18em}
-/* Per-line stagger without a transition-delay: a delay cannot be scrubbed, so each
-   line simply reads a shifted slice of the same channel. */
-.t12-ln-i{display:block;
-  --lrv:clamp(0,calc(var(--rv,1) * 1.5 - var(--i,0) * .2),1);
-  transform:translateY(calc((1 - var(--lrv)) * 108%))}
-.t12-p{font-size:clamp(16px,1.28vw,21px);line-height:1.62;max-width:44ch;margin-top:1.1em}
-.t12-p--wide{max-width:62ch}
-.t12-lead{font-size:clamp(17px,1.5vw,24px);line-height:1.5;max-width:46ch;
-  margin-top:1.2em;font-weight:500}
-.t12-note{font-family:var(--t12-mono);font-size:12px;line-height:1.75;opacity:.74;
-  max-width:56ch;margin-top:1.4em}
-.t12-eyebrow{font-family:var(--t12-mono);font-size:clamp(10px,1vw,12px);font-weight:700;
-  letter-spacing:.1em;text-transform:uppercase}
-.t12-dash{display:inline-block;opacity:.5;font-size:max(12px,.86em)}
-.t12-to{display:inline-block;margin:0 .28em;opacity:.5;font-size:.5em;vertical-align:.28em;
-  font-family:var(--t12-mono);font-weight:500}
-
-.t12-btn{position:relative;display:inline-block;text-decoration:none;font-weight:700;
-  font-size:15px;padding:14px 22px;border:2px solid currentColor;overflow:hidden;
-  transition:color .4s var(--t12-ease),transform .4s var(--t12-ease),border-color .4s ease;
-  z-index:0}
-/* The fill wipes up from the baseline, the way a sign gets painted in. */
-.t12-btn::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--t12-fg);
-  transform:translateY(101%);transition:transform .5s var(--t12-ease)}
-.t12-btn:hover,.t12-btn:focus-visible{transform:translateY(-2px);color:var(--t12-ground)}
-.t12-btn:hover::before,.t12-btn:focus-visible::before{transform:translateY(0)}
-.t12-btn.is-primary{background:var(--t12-fg);color:var(--t12-ground)}
-.t12-btn.is-primary::before{background:var(--t12-live);transform:translateY(-101%)}
-.t12-btn.is-primary:hover,.t12-btn.is-primary:focus-visible{border-color:var(--t12-live);color:#fff}
-
-/* --------------------------------------------------------- 01 the sign ------ */
-.t12-hero{min-height:100svh;display:flex;flex-direction:column;justify-content:center;
-  padding:calc(96px + env(safe-area-inset-top)) 0 34px;position:relative;z-index:2}
-.t12-plate{position:relative;margin-inline:var(--t12-gut);
-  background:var(--t12-yellow);color:var(--t12-ink);
-  padding:clamp(20px,3.4vw,44px);
-  transform:scale(calc(.972 + var(--rv,1) * .028));
-  opacity:calc(.2 + var(--rv,1) * .8);
-  will-change:transform}
-.t12-plate-rule{position:absolute;inset:clamp(9px,1.1vw,15px);
-  border:clamp(3px,.42vw,6px) solid var(--t12-ink);pointer-events:none}
-.t12-plate-in{position:relative;padding:clamp(14px,2vw,30px) clamp(10px,1.6vw,26px)}
-
-/* The wordmark is a window. The fill is a still image of every sleeve in the shop,
-   so CSS does this on its own: background-clip:text cannot take a <video>, which is
-   the only reason a canvas was ever needed for this device. A solid background-color
-   sits under the image so the glyphs are readable blue if the image ever 404s. */
-.t12-mark{margin:clamp(10px,1.4vw,20px) 0 0;line-height:.92}
-.t12-mark-fill{
-  display:block;font-weight:900;letter-spacing:-.045em;line-height:.94;
-  font-size:clamp(58px,14.2vw,208px);
-  background-color:var(--t12-ink);
-  background-image:image-set(url(img/wall.webp) 1x);
-  background-repeat:repeat;
-  background-size:102% auto;
-  background-position:50% calc(var(--drift,0) * 1px);
-  -webkit-background-clip:text;background-clip:text;
-  color:transparent;-webkit-text-fill-color:transparent;
-}
-@media (max-width:759px){
-  /* Two lines on a phone, so the letters are big enough for the wall inside them to
-     read at all. One line at 390px caps the mark at ~58px and the window turns to mush. */
-  .t12-mark-fill{background-image:image-set(url(img/wall-sm.webp) 1x);
-    font-size:min(21.5vw,104px);line-height:.99;background-size:128% auto}
-  .t12-mark-fill>span{display:block}
-}
-@supports not ((-webkit-background-clip:text) or (background-clip:text)){
-  .t12-mark-fill{color:var(--t12-ink);-webkit-text-fill-color:var(--t12-ink);background-image:none}
-}
-.t12-hero-lead{font-size:clamp(15px,1.5vw,22px);font-weight:500;max-width:34ch;
-  margin-top:clamp(14px,1.8vw,24px)}
-.t12-hero-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:clamp(18px,2.2vw,30px)}
-.t12-hero-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;
-  margin:clamp(18px,2.4vw,32px) var(--t12-gut) 0;
-  font-family:var(--t12-mono);font-size:11px;font-weight:500;letter-spacing:.05em;
-  text-transform:uppercase;opacity:.78}
-
-/* --------------------------------------------------------- 02 the claim ----- */
-.t12-story{padding:var(--t12-sec) 0}
-.t12-cols{display:grid;gap:clamp(8px,2vw,40px);margin-top:clamp(18px,2.4vw,34px)}
-@media (min-width:900px){.t12-cols{grid-template-columns:1fr 1fr}.t12-cols .t12-p{margin-top:0}}
-.t12-marks{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;margin-top:clamp(40px,6vw,90px);
-  background:var(--t12-rule);border:1px solid var(--t12-rule)}
-@media (min-width:760px){.t12-marks{grid-template-columns:repeat(4,1fr)}}
-.t12-marks li{background:var(--t12-ground);padding:clamp(16px,2.4vw,30px)}
-.t12-marks b{display:block;font-weight:900;letter-spacing:-.03em;
-  font-size:clamp(34px,4.6vw,62px);line-height:1}
-.t12-marks span{display:block;font-family:var(--t12-mono);font-size:11px;font-weight:500;
-  letter-spacing:.06em;text-transform:uppercase;opacity:.72;margin-top:8px}
-
-/* --------------------------------------------------------- 03 the crate -----
-   A NATIVE scroller. Nothing here is pinned and nothing is transformed from a
-   scroll event, so on touch the sleeves move at exactly 1.00x the finger with no
-   JS in the path at all. Drag inertia is added on fine pointers only.           */
-.t12-crate-sec{padding:var(--t12-sec) 0 clamp(56px,7vw,110px);overflow:hidden}
-.t12-crate{margin-top:clamp(34px,4.6vw,64px);overflow-x:auto;overflow-y:hidden;
-  scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
-  scrollbar-width:none;cursor:grab;padding-block:4px}
-.t12-crate::-webkit-scrollbar{display:none}
-.t12-crate.is-drag{cursor:grabbing;scroll-snap-type:none}
-.t12-crate.is-drag *{pointer-events:none}
-.t12-crate-track{display:flex;align-items:flex-end;gap:clamp(14px,1.6vw,26px);
-  width:max-content;padding-inline:var(--t12-gut)}
-.t12-card{flex:none;width:clamp(178px,20vw,260px);scroll-snap-align:center;
-  position:relative;z-index:1}
-.t12-card:hover,.t12-card:focus-within{z-index:3}
-.t12-card figure{display:flex;flex-direction:column;gap:14px}
-.t12-sleeve{aspect-ratio:1;position:relative}
-.t12-jacket{display:block;position:relative;z-index:2;height:100%;
-  background:color-mix(in srgb,var(--t12-ink) 12%,transparent);overflow:hidden;
-  box-shadow:0 1px 0 color-mix(in srgb,var(--t12-ink) 30%,transparent);
-  transition:transform .5s var(--t12-ease),box-shadow .5s ease}
-.t12-jacket img{width:100%;height:100%;object-fit:contain}
-
-/* --------------------------------------------------- the record comes out ----
-   Adopted from 21st.dev's Vinyl Album Card (@saurabh-2607), which is one idea
-   worth having: it is not the disc sliding out that sells it, it is that the
-   JACKET RECOILS on a tighter, faster curve than the record leaves on. Kept the
-   two opposed channels and their relative weights; replaced everything else
-   (framer-motion, the holographic gradients, eleven nested groove divs) with one
-   element whose grooves are a repeating-radial-gradient, so 44 of these cost 44
-   elements rather than 484. Its centre label is the record's OWN artwork.
-   Fine pointers only: on touch there is no hover to reveal it, and a phone
-   should not pay for 44 extra painted circles. */
-.t12-disc{position:absolute;inset:0;z-index:1;border-radius:50%;
-  background:
-    repeating-radial-gradient(circle at 50% 50%,
-      rgba(255,255,255,.075) 0 1px, rgba(255,255,255,0) 1px 3.5px),
-    conic-gradient(from 200deg at 50% 50%, rgba(255,255,255,.11), rgba(255,255,255,0) 22%,
-      rgba(255,255,255,.06) 48%, rgba(255,255,255,0) 72%, rgba(255,255,255,.11)),
-    radial-gradient(circle at 50% 50%, #15171d 0 49.5%, rgba(0,0,0,0) 49.7%);
-  transition:transform .8s cubic-bezier(.18,.9,.24,1.02)}
-.t12-disc::before{content:'';position:absolute;left:50%;top:50%;width:34%;height:34%;
-  translate:-50% -50%;border-radius:50%;background:var(--lbl) 50%/cover,var(--t12-yellow);
-  box-shadow:0 0 0 1px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.16)}
-.t12-disc::after{content:'';position:absolute;left:50%;top:50%;width:3.4%;height:3.4%;
-  translate:-50% -50%;border-radius:50%;background:var(--t12-ground)}
-@media (hover:hover) and (pointer:fine){
-  .t12-card:hover .t12-disc,.t12-card:focus-within .t12-disc{
-    transform:translateX(43%) rotate(192deg)}
-  .t12-card:hover .t12-jacket,.t12-card:focus-within .t12-jacket{
-    transform:translateX(-7px) rotate(-2.2deg) scale(.984);
-    box-shadow:14px 16px 26px -14px color-mix(in srgb,var(--t12-ink) 60%,transparent)}
-}
-@media (hover:hover) and (pointer:coarse),(hover:none){.t12-disc{display:none}}
-.t12-card-a{font-weight:700;font-size:15px;line-height:1.25;letter-spacing:-.01em}
-.t12-card-t{font-size:13.5px;line-height:1.4;opacity:.78;margin-top:2px;
-  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.t12-card-m{display:flex;justify-content:space-between;gap:8px;margin-top:8px;
-  padding-top:8px;border-top:1px solid var(--t12-rule);
-  font-family:var(--t12-mono);font-size:10.5px;font-weight:500;letter-spacing:.04em;
-  text-transform:uppercase}
-.t12-card-p{font-weight:700;font-variant-numeric:tabular-nums}
-/* the alphabetical divider card, the way a real crate is divided */
-.t12-div{flex:none;align-self:stretch;display:flex;align-items:flex-end;
-  width:clamp(34px,3.4vw,54px);border-left:2px solid var(--t12-fg);padding-left:8px}
-.t12-div span{font-weight:900;font-size:clamp(26px,2.8vw,42px);line-height:.9;
-  transform:translateY(-58px)}
-.t12-crate-foot{margin-top:clamp(22px,3vw,40px)}
-.t12-rail{height:2px;background:var(--t12-rule);position:relative;overflow:hidden}
-.t12-rail-in{position:absolute;left:0;top:0;bottom:0;width:100%;background:var(--t12-fg);
-  transform:scaleX(var(--p,0));transform-origin:0 50%}
-.t12-hint{font-family:var(--t12-mono);font-size:10.5px;font-weight:500;letter-spacing:.1em;
-  text-transform:uppercase;opacity:.6;margin-top:10px}
-
-/* --------------------------------------------------- 04 the listening floor - */
-.t12-listen{padding:var(--t12-sec) 0}
-.t12-listen-grid{display:grid;gap:clamp(30px,5vw,72px);align-items:center}
-@media (min-width:960px){.t12-listen-grid{grid-template-columns:1fr 1fr}}
-/* Their only interior photograph is 640x480 and that IS the original, so it is
-   rendered in a fixed frame rather than blown up to fill a column. */
-.t12-listen-f{max-width:520px;justify-self:center;width:100%}
-.t12-listen-f img{width:100%;height:auto;
-  clip-path:inset(calc((1 - var(--rv,1)) * 12%) 0 0 0);
-  filter:saturate(calc(.72 + var(--rv,1) * .28))}
-.t12-listen-f figcaption{font-family:var(--t12-mono);font-size:11px;line-height:1.7;
-  opacity:.7;margin-top:12px}
-.t12-specs{margin-top:clamp(24px,3.4vw,44px);border-top:1px solid var(--t12-rule);max-width:44ch}
-.t12-specs div{display:flex;justify-content:space-between;gap:16px;
-  padding:clamp(9px,1.1vw,14px) 0;border-bottom:1px solid var(--t12-rule)}
-.t12-specs dt{font-family:var(--t12-mono);font-size:11px;font-weight:500;letter-spacing:.06em;
-  text-transform:uppercase;opacity:.72}
-.t12-specs dd{margin:0;font-weight:700;font-size:15px;text-align:right}
-
-/* --------------------------------------------------------- 05 the label ----- */
-.t12-label{padding:0 0 var(--t12-sec)}
-.t12-names{margin-top:clamp(30px,4.4vw,60px);border-top:1px solid var(--t12-rule)}
-.t12-names li{position:relative;border-bottom:1px solid var(--t12-rule);
-  padding:clamp(12px,1.6vw,22px) 0;font-weight:900;letter-spacing:-.028em;
-  font-size:clamp(24px,4.4vw,58px);line-height:1.14;
-  transform:translateX(calc((1 - var(--rv,1)) * -22px));
-  opacity:calc(.15 + var(--rv,1) * .85)}
-/* A yellow rule draws under the name being read, in the sign's own vocabulary. */
-.t12-names li::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:3px;
-  background:var(--t12-yellow);transform:scaleX(0);transform-origin:0 50%;
-  transition:transform .55s var(--t12-ease)}
-.t12-names li:hover::after{transform:scaleX(1)}
-.t12-guard{font-family:var(--t12-mono);font-size:12px;line-height:1.8;max-width:60ch;
-  margin-top:clamp(22px,3vw,38px);padding-left:14px;
-  border-left:3px solid color-mix(in srgb,var(--t12-yellow) 70%,transparent)}
-
-/* --------------------------------------------------- 06 the lower floor -----
-   78 sleeves whose sources are 225-480px, rendered at <=104 CSS px. Nothing on
-   this page is ever shown larger than its own pixels.                          */
-.t12-lower{padding:var(--t12-sec) 0}
-
-/* ------------------------------------------------------------- the torch ----
-   Adopted from 21st.dev's Torch Reveal (@rmahammad / Motiq). What was worth
-   taking is the engineering, not the look: a CSS radial ALPHA MASK whose centre
-   and radius are three custom properties, so the loop writes three numbers a
-   frame and never causes layout (their note that SVG luminance masks with
-   gradient content are a silent no-op in Chromium saved a wrong turn); the
-   position SPRINGING after the pointer so the light reads as hand-held rather
-   than parented; the radius breathing on two incommensurate sines; and the idle
-   Lissajous patrol, so somebody who never moves the mouse still sees what the
-   section is. Inverted here: theirs reveals a second layer, this one is a scrim
-   with a hole in it, so the 78 sleeves are loaded and decoded exactly once.
-   The scrim only appears once JS marks it live, so no-JS and reduced-motion
-   visitors get the wall at full brightness rather than a dark rectangle. */
-.t12-torch{position:relative;touch-action:pan-y}
-.t12-torch-scrim,.t12-torch-glow{position:absolute;inset:0;pointer-events:none;opacity:0}
-.t12-torch-scrim{z-index:2;background:color-mix(in srgb,var(--t12-ink) 92%,#000);
-  transition:opacity .5s ease;
-  --t12-mask:radial-gradient(circle calc(var(--tr,0) * 1px)
-    at calc(var(--tx,-600) * 1px) calc(var(--ty,-600) * 1px),
-    transparent 0 34%, rgba(0,0,0,.5) 70%, #000 100%);
-  -webkit-mask-image:var(--t12-mask);mask-image:var(--t12-mask)}
-.t12-torch-glow{z-index:3;mix-blend-mode:screen;transition:opacity .5s ease;
-  background:radial-gradient(circle calc(var(--tr,0) * 1.15px)
-    at calc(var(--tx,-600) * 1px) calc(var(--ty,-600) * 1px),
-    color-mix(in srgb,var(--t12-yellow) 17%,transparent) 0 26%, transparent 74%)}
-.t12-torch[data-live] .t12-torch-scrim{opacity:.9}
-.t12-torch[data-live] .t12-torch-glow{opacity:1}
-.t12-torch-hint{margin-top:clamp(16px,2vw,26px)}
-.t12-torch:not([data-live]) + .t12-torch-hint{display:none}
-
-.t12-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));
-  gap:clamp(6px,.8vw,12px);margin:clamp(34px,4.6vw,64px) var(--t12-gut) 0}
-@media (min-width:760px){
-  .t12-tiles{grid-template-columns:repeat(auto-fill,minmax(92px,1fr))}
-}
-.t12-tile{position:relative;aspect-ratio:1;background:color-mix(in srgb,var(--t12-ink) 10%,transparent);
-  overflow:hidden}
-.t12-tile img{width:100%;height:100%;object-fit:cover;
-  transition:transform .6s var(--t12-ease),filter .4s ease}
-.t12-tile::after{content:'';position:absolute;inset:0;z-index:2;pointer-events:none;
-  box-shadow:inset 0 0 0 0 var(--t12-yellow);transition:box-shadow .35s var(--t12-ease)}
-.t12-tile:hover img,.t12-tile:focus-within img{transform:scale(1.07);filter:saturate(1.15)}
-.t12-tile:hover::after{box-shadow:inset 0 0 0 2px var(--t12-yellow)}
-.t12-tile-cap{position:absolute;inset:auto 0 0 0;padding:6px 7px 7px;
-  background:linear-gradient(transparent,color-mix(in srgb,var(--t12-ink) 92%,transparent) 46%);
-  color:var(--t12-paper);font-family:var(--t12-mono);font-size:8.5px;line-height:1.35;
-  opacity:0;transition:opacity .3s ease;pointer-events:none}
-.t12-tile-cap b{display:block;font-weight:700;font-size:9px}
-.t12-tile:hover .t12-tile-cap{opacity:1}
-
-/* -------------------------------------------------------- 07 in numbers ----- */
-.t12-nums{padding:var(--t12-sec) 0}
-.t12-numgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;
-  margin-top:clamp(34px,4.6vw,64px);background:var(--t12-rule);border:1px solid var(--t12-rule)}
-@media (min-width:760px){.t12-numgrid{grid-template-columns:repeat(3,1fr)}}
-.t12-numgrid li{background:var(--t12-ground);padding:clamp(18px,2.6vw,34px)}
-.t12-numgrid b{display:block;font-weight:900;letter-spacing:-.032em;line-height:1;
-  font-size:clamp(30px,4.2vw,58px);font-variant-numeric:tabular-nums}
-.t12-numgrid span{display:block;font-family:var(--t12-mono);font-size:11px;font-weight:500;
-  letter-spacing:.05em;text-transform:uppercase;opacity:.72;margin-top:10px}
-/* A range is two numbers and a word: it broke onto three lines and read as three
-   separate figures, because `.t12-numgrid span` (0,1,1) out-specifies `.t12-to`
-   (0,1,0) and turned the connecting word into a block. Match the specificity. */
-.t12-num--range b{white-space:nowrap;font-size:clamp(22px,3.1vw,42px)}
-.t12-numgrid .t12-to{display:inline-block;font-size:max(12px,.42em);vertical-align:.3em;
-  opacity:.55;text-transform:lowercase;letter-spacing:0}
-/* At two columns the range needs a whole row, or a 12px connector plus two five-digit
-   numbers cannot fit one line and it reads as three separate figures again. */
-@media (max-width:759px){.t12-num--range{grid-column:1 / -1}}
-
-/* ---------------------------------------------------------- 08 the shop ----- */
-.t12-shop{padding:0 0 var(--t12-sec)}
-.t12-shop-f{position:relative;overflow:hidden;margin:0}
-.t12-shop-f img{width:100%;height:clamp(320px,62vh,720px);object-fit:cover;
-  transform:translate3d(0,var(--par,0px),0) scale(1.08)}
-.t12-shop-f figcaption{position:absolute;left:var(--t12-gut);bottom:14px;
-  font-family:var(--t12-mono);font-size:10.5px;letter-spacing:.04em;color:#fff;
-  text-shadow:0 1px 10px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.9)}
-.t12-shop-grid{display:grid;gap:clamp(30px,4.6vw,68px);padding-top:clamp(44px,6vw,90px)}
-@media (min-width:960px){.t12-shop-grid{grid-template-columns:1.1fr .9fr}}
-.t12-shop-adr{margin-top:1.5em;font-weight:900;letter-spacing:-.02em;line-height:1.14;
-  font-size:clamp(24px,3vw,42px)}
-.t12-shop-adr a{text-decoration:none;border-bottom:3px solid color-mix(in srgb,var(--t12-yellow) 60%,transparent)}
-.t12-shop-tel{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:1.2em;
-  font-family:var(--t12-mono);font-size:13px;font-weight:500}
-.t12-shop-tel a{text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:2px}
-.t12-hours table{width:100%;border-collapse:collapse}
-.t12-hours th,.t12-hours td{text-align:left;padding:clamp(9px,1.1vw,14px) 0;
-  border-bottom:1px solid var(--t12-rule);font-weight:500;font-size:15px}
-.t12-hours td{text-align:right;font-family:var(--t12-mono);font-size:13px;
-  font-variant-numeric:tabular-nums}
-.t12-hours tr[data-today] th,.t12-hours tr[data-today] td{font-weight:700;color:var(--t12-yellow)}
-.t12-hours tr[data-today] th::before{content:'';display:inline-block;width:7px;height:7px;
-  background:currentColor;margin-right:9px;vertical-align:middle}
-
-/* -------------------------------------------------------- 09 contact -------- */
-.t12-contact{padding:var(--t12-sec) 0}
-.t12-contact-grid{display:grid;gap:clamp(30px,4.6vw,68px)}
-@media (min-width:960px){.t12-contact-grid{grid-template-columns:1fr 1fr;align-items:start}}
-.t12-form{display:grid;gap:16px;margin-top:clamp(10px,2vw,28px)}
-.t12-field{display:grid;gap:6px}
-.t12-field label{font-family:var(--t12-mono);font-size:11px;font-weight:700;
-  letter-spacing:.08em;text-transform:uppercase;opacity:.8}
-.t12-field input,.t12-field textarea{
-  font:inherit;font-size:16px;color:inherit;background:transparent;
-  border:2px solid var(--t12-fg);padding:13px 14px;width:100%;resize:vertical}
-.t12-field input:hover,.t12-field textarea:hover{border-color:var(--t12-live)}
-.t12-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-.t12-form-msg{font-family:var(--t12-mono);font-size:12px;line-height:1.7;min-height:1.7em}
-.t12-form-msg[data-ok]{font-weight:700}
-
-/* ---------------------------------------------------------------- footer ---- */
-.t12-foot{background:var(--t12-ground);color:var(--t12-fg);
-  padding:clamp(56px,7vw,110px) 0 calc(34px + env(safe-area-inset-bottom));
-  border-top:1px solid var(--t12-rule)}
-.t12-foot-mark{font-weight:900;letter-spacing:-.03em;line-height:.86;
-  font-size:clamp(56px,15vw,220px);color:var(--t12-yellow)}
-.t12-foot-grid{display:grid;gap:18px;margin-top:clamp(28px,4vw,54px);
-  padding-top:clamp(20px,2.6vw,34px);border-top:1px solid var(--t12-rule);
-  font-family:var(--t12-mono);font-size:12.5px;line-height:1.85}
-@media (min-width:760px){.t12-foot-grid{grid-template-columns:repeat(3,1fr)}}
-.t12-foot-grid a{text-decoration:none;border-bottom:1px solid currentColor}
-/* Dim these with COLOUR, not opacity: an opacity on the container also dims the link
-   inside it, and a focusable element a keyboard user cannot see is a real defect. */
-.t12-disclose{font-family:var(--t12-mono);font-size:11px;line-height:1.85;
-  color:color-mix(in srgb,var(--t12-fg) 74%,var(--t12-ground));
-  max-width:78ch;margin-top:clamp(26px,3.4vw,44px)}
-.t12-by{font-family:var(--t12-mono);font-size:11px;margin-top:14px;
-  color:color-mix(in srgb,var(--t12-fg) 74%,var(--t12-ground))}
-.t12-by a{border-bottom:1px solid currentColor;text-decoration:none;color:var(--t12-fg)}
-
-/* ---------------------------------------------------------------- reveal ----
-   One channel per element, written on the element itself. A custom property is
-   inherited, so writing one on the ROOT dirties the inherited style of the whole
-   document; nothing here ever does that. Default is 1 so the page is complete
-   with no JS at all.                                                           */
-[data-rv]{opacity:calc(.08 + var(--rv,1) * .92);
-  transform:translate3d(0,calc((1 - var(--rv,1)) * 26px),0)}
-/* A split heading carries the channel but must not move as a block, or the lines
-   inside it would ride two transforms at once. */
-.t12-h2[data-rv]{opacity:1;transform:none}
-.t12-marks li[data-rv],.t12-numgrid li[data-rv]{transform:translate3d(0,calc((1 - var(--rv,1)) * 34px),0)}
-.t12-names li[data-rv]{transform:translateX(calc((1 - var(--rv,1)) * -22px))}
-.t12-plate[data-rv]{opacity:calc(.2 + var(--rv,1) * .8)}
-.t12-listen-f[data-rv]{opacity:calc(.2 + var(--rv,1) * .8);transform:none}
-/* A scrubbed reveal puts focusable controls at opacity 0 ahead of the scroll, so a
-   keyboard user can Tab onto something invisible. */
-[data-rv].has-focus{--rv:1 !important}
-
-@media (prefers-reduced-motion:reduce){
-  .t12-html{scroll-behavior:auto}
-  /* A record spinning out of its sleeve and a light sweeping a wall are both
-     motion, so both are simply absent rather than instant. */
-  .t12-disc{display:none}
-  .t12-torch[data-live] .t12-torch-scrim,.t12-torch[data-live] .t12-torch-glow{opacity:0 !important}
-  .t12-roll>span+span{display:none}
-  .t12-roll>span{transform:none !important}
-  [data-rv],[data-rv].has-focus{--rv:1 !important;opacity:1 !important;transform:none !important}
-  .t12-ln-i{transform:none !important}
-  .t12-shop-f img{transform:scale(1.02) !important}
-  .t12-mark-fill{background-position:50% 0 !important}
-  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;
-    transition-duration:.001ms !important}
+.al-ft-kt {
+  margin: 0 0 10px;
+  font: 400 10.5px/1.7 var(--mono); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dust);
 }
 
-/* ------------------------------------------------------------ hit targets ---
-   An inline link's touch target is expanded with an absolutely positioned ::before
-   rather than with padding, because padding breaks the line rhythm of the text it
-   sits in. getBoundingClientRect() cannot see a pseudo-element, so the audit walks
-   elementFromPoint outward instead of measuring the box. */
-.t12-head-nav a,.t12-shop-tel a,.t12-shop-adr a,.t12-foot-grid a,.t12-by a,
-.t12-menu-foot a,.t12-guard a{position:relative}
-.t12-head-nav a::before,.t12-shop-tel a::before,.t12-shop-adr a::before,
-.t12-foot-grid a::before,.t12-by a::before,.t12-menu-foot a::before{
-  content:'';position:absolute;left:0;right:0;top:50%;translate:0 -50%;
-  height:44px;min-width:44px}
-.t12-head-mark{padding-block:8px}
-.t12-head-tel{padding-block:12px}
-
-/* --------------------------------------------------------- phone type floor -
-   The mono label is the page's most repeated text style, and at phone width an
-   11px label reads as fine print rather than as a label. */
-@media (max-width:759px){
-  .t12-eyebrow,.t12-tone,.t12-tone-n,.t12-tone-k,.t12-note,.t12-hint,.t12-guard,
-  .t12-hero-foot,.t12-marks span,.t12-numgrid span,.t12-specs dt,
-  .t12-listen-f figcaption,.t12-shop-f figcaption,.t12-field label,.t12-form-msg,
-  .t12-foot-grid,.t12-disclose,.t12-by,.t12-card-m,.t12-shop-tel,.t12-menu-foot{font-size:12px}
-  .t12-tile-cap{font-size:10px}
-  .t12-tile-cap b{font-size:10.5px}
+@media (prefers-reduced-motion: reduce) {
+  .al-rel-link:hover .al-rel-img,
+  .al-rel-link:focus-visible .al-rel-img { transform: none; }
 }
-
-/* An `animation: ... infinite` runs for the whole session unless it is stopped.
-   The shorthand re-sets play-state, so at equal specificity the pause rule loses on
-   source order and !important is genuinely required here. */
-[data-off] ,[data-off] *{animation-play-state:paused !important}

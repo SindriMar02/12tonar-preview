@@ -1,111 +1,105 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-import * as C from './content.mjs';
-
-const here = dirname(fileURLToPath(import.meta.url));
-const CAT = JSON.parse(readFileSync(join(here, 'catalogue.json'), 'utf8'));
+import {
+  META, NAV, HERO, SHOP, ROSTER, HISTORY, LABEL, CTA, FOOTER,
+  ARTISTS, RELEASES,
+} from './content.mjs';
+import { LOCKUP_PATH, LOCKUP_VIEWBOX, LOCKUP_TRANSFORM } from './brand.mjs';
 
 const esc = (s) => String(s)
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;');
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/* Icelandic groups thousands with a PERIOD. Chrome's ICU maps is-IS to a comma, so this
-   is hand-rolled and never goes near toLocaleString (redesign-craft-ledger #27a). */
-const isk = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+const isk = (n) => `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} kr`;
 
-const IS_ORDER = 'aábcdðeéfghiíjklmnoópqrstuúvwxyýzþæö';
-const firstLetter = (s) => {
-  const c = s.trim()[0].toLowerCase();
-  return IS_ORDER.includes(c) ? c.toUpperCase() : '#';
+/* Their own wordmark, traced from the logo file their storefront serves. The keyline
+   plate is dropped and only the letters kept, so the lockup takes currentColor. The
+   group transform is potrace's y-flip, kept rather than baked so the path stays exactly
+   what the tracer produced. */
+const brandLockup = (id, cls = 'al-lock') => `
+<svg class="${cls}" viewBox="${LOCKUP_VIEWBOX}" role="img" aria-labelledby="${id}" focusable="false">
+  <title id="${id}">12 Tónar</title>
+  <g transform="${LOCKUP_TRANSFORM}"><path fill="currentColor" fill-rule="evenodd" d="${LOCKUP_PATH}"/></g>
+</svg>`;
+
+/* A tall thin waveform glyph used as the section rule. Drawn, not an image, so it inherits
+   the band's ink and costs nothing. */
+const waveRule = () => `
+<svg class="al-rule" viewBox="0 0 1200 24" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+  <path d="M0 12h84l10-7 9 14 10-19 9 24 10-14 9 9 11-5h96l10-9 9 18 10-24 9 30 10-18 9 11 11-8h96l10-6 9 12 10-16 9 20 10-12 9 8 11-6h96l10-11 9 22 10-28 9 34 10-20 9 13 11-10h96l10-5 9 10 10-14 9 18 10-10 9 7 11-6h96l10-8 9 16 10-20 9 24 10-14 9 9 11-7h96" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+</svg>`;
+
+const sleeve = (r, i) => `
+<article class="al-rel" data-rel="${i}" style="--n:${i % 8}">
+  <a class="al-rel-link" href="${esc(r.url)}" target="_blank" rel="noopener">
+    <span class="al-rel-frame">
+      <span class="al-rel-disc" aria-hidden="true"><span class="al-rel-disc-i"></span></span>
+      <img class="al-rel-img" src="img/shop/${esc(r.slug)}.webp" width="${r.w}" height="${r.h}"
+           alt="Umslag: ${esc(r.artist)}, ${esc(r.title)}" loading="lazy" decoding="async">
+    </span>
+    <span class="al-rel-meta">
+      <span class="al-rel-fmt">${esc(r.format)}</span>
+      <span class="al-rel-artist">${esc(r.artist)}</span>
+      <span class="al-rel-title">${esc(r.title)}</span>
+      <span class="al-rel-price">${esc(isk(r.price))}</span>
+    </span>
+  </a>
+</article>`;
+
+/* The row carries the record's title so the now-block can name the sleeve on screen.
+   A plate here is an album cover, not a portrait, so naming only the artist would leave
+   the picture uncaptioned. */
+const rosterRow = (a, i) => `
+<li class="al-name" data-i="${i}" data-title="${esc(a.title)}">
+  <button type="button" class="al-name-b" data-goto="${i}" aria-label="Sýna ${esc(a.name)}">
+    <span class="al-name-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
+    <span class="al-name-t">${esc(a.name)}</span>
+  </button>
+</li>`;
+
+/* Alda's plates are PORTRAITS, taller than wide, so on a 1440x900 viewport the height
+   governs and an 800px source covers honestly. A SQUARE sleeve on the same viewport is
+   governed by the 1440px width, so the threshold is raised and most sleeves render as
+   Alda's contained archive plate over an out-of-focus wash of themselves. For a record
+   cover that is the better reading anyway: it stays the square object it is instead of
+   being cropped into a backdrop. `full` is computed at build time in tools/assets.py. */
+const plate = (a, i) => {
+  const archive = !a.full;
+  return `
+<figure class="al-plate" data-plate="${i}" ${i === 0 ? 'data-on="1"' : ''}${archive ? ' data-archive="1"' : ''}
+        ${archive ? `style="--al-bg:url('img/artists/${esc(a.slug)}-w.webp')"` : ''}>
+  <img src="img/artists/${esc(a.slug)}.webp"
+       srcset="img/artists/${esc(a.slug)}-m.webp ${a.mw}w, img/artists/${esc(a.slug)}.webp ${a.w}w"
+       sizes="(max-width: 900px) 100vw, ${archive ? '52vw' : '100vw'}"
+       width="${a.w}" height="${a.h}"
+       alt="Plötuumslag: ${esc(a.name)}, ${esc(a.title)}" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"
+       style="--al-natw:${a.w}px">
+</figure>`;
 };
 
-const FMT = { 'Vinyl Record': 'Vínyll', CD: 'Geisladiskur', 'Tote Bag': 'Taska', 'T-Shirt': 'Bolur' };
+const era = (h, i) => `
+<article class="al-era" data-era="${i}">
+  <span class="al-era-y">${esc(h.year)}</span>
+  <span class="al-era-tag">${esc(h.tag)}</span>
+  <h3 class="al-era-h">${esc(h.head)}</h3>
+  <p class="al-era-b">${esc(h.body)}</p>
+</article>`;
 
-/* ---------------------------------------------------------------- the crate ------- */
-function crateCards() {
-  let out = '';
-  let letter = '';
-  CAT.crate.forEach((r, i) => {
-    const L = firstLetter(r.artist);
-    if (L !== letter) {
-      letter = L;
-      out += `<li class="t12-div" aria-hidden="true"><span>${esc(L)}</span></li>`;
-    }
-    /* The disc sits BEHIND the jacket and is pulled out on hover: two opposed
-       springs, the record sliding and turning while the jacket recoils. Its centre
-       label is the record's own artwork, so the object is self-consistent. */
-    out += `<li class="t12-card">
-        <figure>
-          <div class="t12-sleeve">
-            <span class="t12-disc" aria-hidden="true" style="--lbl:url(${esc(r.file)})"></span>
-            <span class="t12-jacket">
-              <img src="${esc(r.file)}" width="${r.ow}" height="${r.oh}" loading="${i < 3 ? 'eager' : 'lazy'}" decoding="async"
-                   alt="Plötuumslag: ${esc(r.artist)}, ${esc(r.title)}">
-            </span>
-          </div>
-          <figcaption>
-            <p class="t12-card-a">${esc(r.artist)}</p>
-            <p class="t12-card-t">${esc(r.title)}</p>
-            <p class="t12-card-m"><span>${esc(FMT[r.fmt] || r.fmt || 'Plata')}</span> <span class="t12-card-p">${isk(r.price)} kr.</span></p>
-          </figcaption>
-        </figure>
-      </li>`;
-  });
-  return out;
-}
-
-function tileGrid() {
-  return CAT.tiles.map((r) => `<li class="t12-tile">
-      <img src="${esc(r.file)}" width="${r.ow}" height="${r.oh}" loading="lazy" decoding="async"
-           alt="Plötuumslag: ${esc(r.artist || 'Ýmsir')}, ${esc(r.title)}">
-      <span class="t12-tile-cap"><b>${esc(r.artist || 'Ýmsir')}</b> ${esc(r.title)}</span>
-    </li>`).join('');
-}
-
-/* ------------------------------------------------------------------- pieces ------- */
-const tone = (n, k) =>
-  `<p class="t12-tone"><span class="t12-tone-n">${n}</span> <span class="t12-tone-k">${esc(k)}</span></p>`;
-
-/* data-rv drives the per-line rise from the heading itself; the heading's own box is
-   pinned by CSS so the motion lives only on the clipped lines inside it. */
-const head = (t, cls = '') =>
-  `<h2 class="t12-h2 ${cls}" data-split data-rv>${esc(t)}</h2>`;
-
-const hoursRows = () => C.HOURS.map((h) => {
-  const t = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  return `<tr data-day="${h.i}"><th scope="row">${esc(h.d)}</th><td>${t(h.o)} <span class="t12-dash">til</span> ${t(h.c)}</td></tr>`;
-}).join('');
-
-const S = CAT.stats;
-
-/* --------------------------------------------------------------------- page ------- */
 export function render({ noindex = false, previewOrigin = '' } = {}) {
-  const canonical = previewOrigin ? previewOrigin.replace(/\/?$/, '/') : '';
-  const title = '12 Tónar · Plötubúð og útgáfa á Skólavörðustíg 15';
-  const desc =
-    'Plötubúð og útgáfa á Skólavörðustíg 15 í Reykjavík síðan 1998. Tvær hæðir af plötum, '
-    + 'plötuspilari og espresso í boði hússins. Opnunartími, staðsetning og lagerinn í búðinni.';
-
-  /* A spec redesign published under a real business's brand must never be indexable: a
-     full-fidelity mockup on a URL that is not theirs can be read as duplicate content
-     and damage the prospect's own search presence, which is the opposite of the pitch. */
-  const robots = noindex
-    ? '<meta name="robots" content="noindex, nofollow">\n  <meta name="googlebot" content="noindex, nofollow">'
-    : '<meta name="robots" content="index, follow">';
+  const canonical = previewOrigin || `https://${META.domain}/`;
+  const ticker = RELEASES.slice(0, 8)
+    .map((r) => `<span class="al-tk-i"><em>${esc(r.artist)}</em> ${esc(r.title)}<i aria-hidden="true">/</i></span>`)
+    .join('');
 
   const ld = {
     '@context': 'https://schema.org',
     '@type': 'MusicStore',
-    name: '12 Tónar',
-    description: desc,
-    ...(canonical ? { url: canonical } : {}),
-    telephone: '+354 511 5656',
-    email: C.SHOP.email,
+    name: META.name,
+    description: META.description,
+    url: canonical,
+    telephone: META.phone,
+    email: META.email,
     foundingDate: '1998',
     address: {
       '@type': 'PostalAddress',
-      streetAddress: C.SHOP.street,
+      streetAddress: 'Skólavörðustígur 15',
       addressLocality: 'Reykjavík',
       postalCode: '101',
       addressCountry: 'IS',
@@ -117,263 +111,255 @@ export function render({ noindex = false, previewOrigin = '' } = {}) {
   };
 
   return `<!doctype html>
-<html lang="is" class="t12-html">
+<html lang="is">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>${esc(title)}</title>
-  <meta name="description" content="${esc(desc)}">
-  ${robots}
-  ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="12 Tónar">
-  <meta property="og:title" content="${esc(title)}">
-  <meta property="og:description" content="${esc(desc)}">
-  <meta property="og:locale" content="is_IS">
-  ${canonical ? `<meta property="og:url" content="${esc(canonical)}">\n  <meta property="og:image" content="${esc(canonical)}img/shopfront.webp">` : ''}
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#F9F500">
-  <!-- Safari does not render SVG favicons at all, so an SVG-only page silently falls
-       back to the ORIGIN's icon. Relative hrefs, and always a raster fallback. -->
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
-  <link rel="icon" href="favicon-48.png" sizes="48x48" type="image/png">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="preload" as="font" type="font/woff2" href="fonts/OverusedGrotesk-Black.woff2" crossorigin>
-  <link rel="preload" as="font" type="font/woff2" href="fonts/OverusedGrotesk-Medium.woff2" crossorigin>
-  <link rel="preload" as="image" href="img/wall.webp" media="(min-width: 760px)">
-  <link rel="preload" as="image" href="img/wall-sm.webp" media="(max-width: 759px)">
-  <link rel="stylesheet" href="style.css">
-  <script type="application/ld+json">${JSON.stringify(ld)}</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(META.title)}</title>
+<meta name="description" content="${esc(META.description)}">
+${noindex ? '<meta name="robots" content="noindex, nofollow">\n<meta name="googlebot" content="noindex, nofollow">' : ''}
+<link rel="canonical" href="${esc(canonical)}">
+<meta property="og:title" content="${esc(META.title)}">
+<meta property="og:description" content="${esc(META.description)}">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="is_IS">
+<meta name="theme-color" content="#0A0A0B">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-48.png" type="image/png" sizes="48x48">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" href="fonts/humane.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/archivo-500.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">${JSON.stringify(ld)}</script>
 </head>
-<body class="t12-body">
-<a class="t12-skip" href="#rekkarnir">Fara beint í rekkana</a>
+<body class="al">
 
-<header class="t12-head" data-theme="sign">
-  <a class="t12-head-mark" href="#top" aria-label="12 Tónar, efst á síðu">
-    <img src="img/logo.webp" width="${CAT.photos.logo.w}" height="${CAT.photos.logo.h}" alt="" decoding="async">
+<!-- The loader paints their own wordmark in block by block, then flies it to the header
+     where the identical artwork is waiting. -->
+<div class="al-load" data-load>
+  <div class="al-load-in">
+    <div class="al-load-lock" data-load-lock>
+      ${brandLockup('load-mark', 'al-lock al-lock--load')}
+      <div class="al-load-grid" data-load-grid aria-hidden="true"></div>
+    </div>
+    <div class="al-load-bar" aria-hidden="true"><i data-load-bar></i></div>
+  </div>
+</div>
+
+<div class="al-grain" aria-hidden="true"></div>
+<a class="al-skip" href="#plotur">Fara í innihald</a>
+
+<header class="al-hd" data-hd>
+  <a class="al-hd-logo" href="#top" aria-label="12 Tónar, efst á síðu" data-hd-lock>
+    ${brandLockup('hd-mark')}
   </a>
-  <nav class="t12-head-nav" aria-label="Aðalvalmynd">
-    ${C.NAV.map((n) => `<a href="#${n.id}"><span class="t12-roll"><span>${esc(n.label)}</span><span aria-hidden="true">${esc(n.label)}</span></span></a>`).join('')}
+  <nav class="al-hd-nav" aria-label="Aðalvalmynd">
+    ${NAV.map(([t, h]) => `<a class="al-hd-l" href="${esc(h)}"${h.startsWith('http') ? ' target="_blank" rel="noopener"' : ''}>${esc(t)}</a>`).join('')}
   </nav>
-  <a class="t12-head-tel" href="tel:${esc(C.SHOP.phoneHref)}">${esc(C.SHOP.phone)}</a>
-  <button class="t12-burger" type="button" aria-expanded="false" aria-controls="t12-menu">
-    <span class="t12-burger-b" aria-hidden="true"><i></i><i></i></span>
-    <span class="t12-sr">Valmynd</span>
+  <button type="button" class="al-burger" data-burger aria-expanded="false" aria-controls="al-menu">
+    <span class="al-burger-l" aria-hidden="true"></span>
+    <span class="al-burger-l" aria-hidden="true"></span>
+    <span class="al-sr">Valmynd</span>
   </button>
 </header>
 
-<div class="t12-menu" id="t12-menu" hidden>
-  <nav aria-label="Valmynd">
-    ${C.NAV.map((n, i) => `<a href="#${n.id}" style="--i:${i}"><span>${esc(n.label)}</span></a>`).join('')}
+<div class="al-menu" id="al-menu" data-menu hidden>
+  <nav class="al-menu-nav" aria-label="Valmynd">
+    ${NAV.map(([t, h], i) => `<a class="al-menu-l" style="--i:${i}" href="${esc(h)}"${h.startsWith('http') ? ' target="_blank" rel="noopener"' : ''}>${esc(t)}</a>`).join('')}
   </nav>
-  <div class="t12-menu-foot">
-    <a href="tel:${esc(C.SHOP.phoneHref)}">${esc(C.SHOP.phone)}</a>
-    <a href="mailto:${esc(C.SHOP.email)}">${esc(C.SHOP.email)}</a>
-    <p>${esc(C.SHOP.street)}, ${esc(C.SHOP.postcode)}</p>
+  <div class="al-menu-foot">
+    <a href="tel:${esc(META.phoneHref)}">${esc(META.phone)}</a>
+    <span>${esc(META.address)}</span>
   </div>
 </div>
 
 <main id="top">
 
-  <!-- 01 ============================================================ the sign -->
-  <section class="t12-hero" id="skiltid" data-theme="sign">
-    <div class="t12-plate" data-rv>
-      <div class="t12-plate-rule" aria-hidden="true"></div>
-      <div class="t12-plate-in">
-        <p class="t12-eyebrow">${esc(C.HERO.eyebrow)}</p>
-        <!-- The window is the PARENT's background, so it stays one continuous image
-             across both words; the spans exist only so the mark can break to two
-             lines on a phone, where one line would shrink it to nothing. -->
-        <h1 class="t12-mark" aria-label="12 Tónar">
-          <span class="t12-mark-fill" aria-hidden="true"><span>12</span> <span>TÓNAR</span></span>
-        </h1>
-        <p class="t12-hero-lead">${esc(C.HERO.lead)}</p>
-        <p class="t12-hero-cta">
-          ${C.HERO.cta.map((c) => `<a class="t12-btn${c.primary ? ' is-primary' : ''}" href="${esc(c.href)}">${esc(c.label)}</a>`).join('')}
-        </p>
+  <section class="al-hero" data-hero data-theme="dark" aria-labelledby="al-h1">
+    <div class="al-hero-frame">
+      <!-- the film: a generated overhead shot of a record turning, monochrome, looped.
+           The one asset here that is not the client's own, and it is the thing the shop
+           is: a record going round. -->
+      <div class="al-hero-film" aria-hidden="true">
+        <video class="al-hero-video" muted loop playsinline autoplay
+               poster="img/brand/record-poster.webp" preload="metadata">
+          <source src="img/brand/record-loop.mp4" type="video/mp4">
+        </video>
       </div>
-    </div>
-    <p class="t12-hero-foot">
-      <span>${isk(S.vinyl + S.cd)} titlar í búðinni</span>
-      <span aria-hidden="true">·</span>
-      <span>${isk(S.artists)} flytjendur</span>
-      <span aria-hidden="true">·</span>
-      <span>Skrunaðu niður</span>
-    </p>
-  </section>
 
-  <!-- 02 ============================================================ the claim -->
-  <section class="t12-story" id="sagan" data-theme="paper">
-    <div class="t12-wrap">
-      ${tone(C.STORY.tone, C.STORY.kicker)}
-      ${head(C.STORY.head, 't12-h2--big')}
-      <div class="t12-cols">
-        ${C.STORY.body.map((p) => `<p class="t12-p" data-rv>${esc(p)}</p>`).join('')}
+      <p class="al-hero-eye">${esc(HERO.eyebrow)}</p>
+
+      <canvas class="al-lattice" data-lattice aria-hidden="true"></canvas>
+
+      <!-- The name is a window: the film plays INSIDE the letters and nowhere else.
+           Canvas rather than mix-blend-mode, because a blend over a hardware composited
+           <video> is silently ignored on WebKit. -->
+      <div class="al-hero-stage">
+        <h1 class="al-sr" id="al-h1">${esc(META.name)}</h1>
+        <canvas class="al-markc" data-markc aria-hidden="true"></canvas>
       </div>
-      <ul class="t12-marks">
-        ${C.STORY.marks.map((m, i) => `<li data-rv style="--i:${i}"><b>${esc(m.n)}</b> <span>${esc(m.t)}</span></li>`).join('')}
-      </ul>
-    </div>
-  </section>
 
-  <!-- 03 ======================================================= the crate -->
-  <section class="t12-crate-sec" id="rekkarnir" data-theme="sign">
-    <div class="t12-wrap">
-      ${tone(C.CRATE.tone, C.CRATE.kicker)}
-      ${head(C.CRATE.head, 't12-h2--big')}
-      <p class="t12-lead" data-rv>${esc(C.CRATE.lead)}</p>
-    </div>
-    <div class="t12-crate" tabindex="0" role="group"
-         aria-label="Plötur í búðinni, ${CAT.crate.length} titlar. Notaðu örvatakkana til að fletta.">
-      <ul class="t12-crate-track">${crateCards()}</ul>
-    </div>
-    <div class="t12-wrap t12-crate-foot">
-      <p class="t12-rail" aria-hidden="true"><span class="t12-rail-in"></span></p>
-      <p class="t12-hint" aria-hidden="true">${esc(C.CRATE.hint)}</p>
-      <p class="t12-note" data-rv>${esc(C.CRATE.note)}</p>
-    </div>
-  </section>
-
-  <!-- 04 ==================================================== the listening floor -->
-  <section class="t12-listen" id="klefinn" data-theme="ink">
-    <div class="t12-wrap t12-listen-grid">
-      <div class="t12-listen-t">
-        ${tone(C.LISTEN.tone, C.LISTEN.kicker)}
-        ${head(C.LISTEN.head)}
-        ${C.LISTEN.body.map((p) => `<p class="t12-p" data-rv>${esc(p)}</p>`).join('')}
-        <dl class="t12-specs" data-rv>
-          ${C.LISTEN.specs.map(([k, v]) => `<div><dt>${esc(k)}</dt> <dd>${esc(v)}</dd></div>`).join('')}
-        </dl>
+      <div class="al-hero-bot">
+        <p class="al-hero-lead">${esc(HERO.lead)}</p>
       </div>
-      <figure class="t12-listen-f" data-rv>
-        <img src="${esc(CAT.photos.racks.file)}" width="${CAT.photos.racks.w}" height="${CAT.photos.racks.h}"
-             loading="lazy" decoding="async" alt="Plöturekkar og veggur af tónleikaplakötum á efri hæðinni í 12 Tónum.">
-        <figcaption>${esc(C.LISTEN.caption)}</figcaption>
-      </figure>
-    </div>
-  </section>
 
-  <!-- 05 ============================================================ the label -->
-  <!-- Type only. A sleeve beside the word "útgáfan" would imply a signing, and most of
-       the sleeves in the shop are other labels' records. -->
-  <section class="t12-label" id="utgafan" data-theme="ink">
-    <div class="t12-wrap">
-      ${tone(C.LABEL.tone, C.LABEL.kicker)}
-      ${head(C.LABEL.head, 't12-h2--big')}
-      ${C.LABEL.body.map((p) => `<p class="t12-p t12-p--wide" data-rv>${esc(p)}</p>`).join('')}
-      <ul class="t12-names">
-        ${C.LABEL.names.map((n, i) => `<li data-rv style="--i:${i}"><span class="t12-roll"><span>${esc(n)}</span><span aria-hidden="true">${esc(n)}</span></span></li>`).join('')}
-      </ul>
-      <p class="t12-guard" data-rv>${esc(C.LABEL.guard)}</p>
-    </div>
-  </section>
+      <a class="al-hero-scroll" href="#plotur">
+        <span class="al-hero-scroll-t">${esc(HERO.scroll)}</span>
+        <span class="al-hero-scroll-r" aria-hidden="true"></span>
+      </a>
 
-  <!-- 06 ======================================================= the lower floor -->
-  <section class="t12-lower" id="nedri" data-theme="paper">
-    <div class="t12-wrap">
-      ${tone(C.LOWER.tone, C.LOWER.kicker)}
-      ${head(C.LOWER.head, 't12-h2--big')}
-      <p class="t12-lead" data-rv>${esc(C.LOWER.lead)}</p>
-    </div>
-    <!-- The wall sits under a scrim with a hole punched in it by a radial alpha mask
-         that springs after the pointer: the lower floor is dim and you carry the light.
-         One scrim for the whole grid, so no image is ever loaded or decoded twice. -->
-    <div class="t12-torch" data-torch>
-      <ul class="t12-tiles">${tileGrid()}</ul>
-      <div class="t12-torch-scrim" aria-hidden="true"></div>
-      <div class="t12-torch-glow" aria-hidden="true"></div>
-    </div>
-    <p class="t12-wrap t12-hint t12-torch-hint" aria-hidden="true">${esc(C.LOWER.hint)}</p>
-  </section>
-
-  <!-- 07 ========================================================== in numbers -->
-  <section class="t12-nums" id="i-tolum" data-theme="sign">
-    <div class="t12-wrap">
-      ${tone(C.NUMBERS.tone, C.NUMBERS.kicker)}
-      ${head(C.NUMBERS.head)}
-      <ul class="t12-numgrid">
-        <li data-rv style="--i:0"><b>${isk(S.vinyl)}</b> <span>plötur á vínyl</span></li>
-        <li data-rv style="--i:1"><b>${isk(S.cd)}</b> <span>geisladiskar</span></li>
-        <li data-rv style="--i:2"><b>${isk(S.artists)}</b> <span>flytjendur í rekkunum</span></li>
-        <li data-rv style="--i:3"><b>${isk(S.available)}</b> <span>titlar til á lager</span></li>
-        <li data-rv style="--i:4"><b>${isk(S.price_med)} kr.</b> <span>miðverð á plötu</span></li>
-        <li class="t12-num--range" data-rv style="--i:5"><b>${isk(S.price_min)} <span class="t12-to">til</span> ${isk(S.price_max)}</b> <span>verðbil í krónum</span></li>
-      </ul>
-      <p class="t12-note" data-rv>${esc(C.NUMBERS.note)}</p>
-    </div>
-  </section>
-
-  <!-- 08 ============================================================= the shop -->
-  <section class="t12-shop" id="budin" data-theme="ink">
-    <figure class="t12-shop-f">
-      <img src="${esc(CAT.photos.shopfront.file)}" width="${CAT.photos.shopfront.w}" height="${CAT.photos.shopfront.h}"
-           loading="lazy" decoding="async"
-           alt="Húsið á Skólavörðustíg 15 að kvöldi, gulu 12 Tónar skiltin í upplýstum búðargluggunum og fólk fyrir utan.">
-      <figcaption>${esc(C.SHOPSEC.caption)}</figcaption>
-    </figure>
-    <div class="t12-wrap t12-shop-grid">
-      <div>
-        ${tone(C.SHOPSEC.tone, C.SHOPSEC.kicker)}
-        ${head(C.SHOPSEC.head, 't12-h2--big')}
-        <p class="t12-p" data-rv>${esc(C.SHOPSEC.body)}</p>
-        <p class="t12-shop-adr" data-rv>
-          <a href="${esc(C.SHOP.maps)}" target="_blank" rel="noopener">
-            ${esc(C.SHOP.street)}<br>${esc(C.SHOP.postcode)}
-          </a>
-        </p>
-        <p class="t12-shop-tel" data-rv>
-          <a href="tel:${esc(C.SHOP.phoneHref)}">${esc(C.SHOP.phone)}</a>
-          <a href="mailto:${esc(C.SHOP.email)}">${esc(C.SHOP.email)}</a>
-        </p>
-      </div>
-      <div class="t12-hours" data-rv>
-        <table>
-          <caption class="t12-sr">Opnunartími</caption>
-          <tbody>${hoursRows()}</tbody>
-        </table>
-        <p class="t12-note">${esc(C.SHOPSEC.hoursNote)}</p>
+      <div class="al-tk">
+        <span class="al-tk-lab">${esc(HERO.tickerLabel)}</span>
+        <div class="al-tk-win">
+          <div class="al-tk-track" aria-hidden="true">${ticker}${ticker}</div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- 09 =========================================================== contact -->
-  <section class="t12-contact" id="hafa-samband" data-theme="sign">
-    <div class="t12-wrap t12-contact-grid">
-      <div>
-        ${tone(C.CONTACT.tone, C.CONTACT.kicker)}
-        ${head(C.CONTACT.head, 't12-h2--big')}
-        <p class="t12-p" data-rv>${esc(C.CONTACT.body)}</p>
+  <section class="al-shop" id="plotur" data-theme="light" aria-labelledby="al-shop-h">
+    <div class="al-shop-head">
+      <p class="al-eye">${esc(SHOP.eyebrow)}</p>
+      <h2 class="al-h2" id="al-shop-h" data-split data-split-rails>${esc(SHOP.title)}</h2>
+      <p class="al-lead" data-split>${esc(SHOP.lead)}</p>
+    </div>
+
+    <div class="al-rail" data-rail role="group" aria-label="Plötur í netverslun, dragðu til hliðar"
+         tabindex="0">
+      <div class="al-rail-track" data-rail-track>
+        ${RELEASES.map(sleeve).join('')}
+        <div class="al-rail-clone" aria-hidden="true">${RELEASES.map(sleeve).join('')}</div>
       </div>
-      <form class="t12-form" novalidate data-rv>
-        ${C.CONTACT.fields.map((f) => `<p class="t12-field">
-          <label for="f-${f.id}">${esc(f.label)}</label>
-          ${f.type === 'textarea'
-      ? `<textarea id="f-${f.id}" name="${f.id}" rows="4" autocomplete="${f.auto}"></textarea>`
-      : `<input id="f-${f.id}" name="${f.id}" type="${f.type}" autocomplete="${f.auto}">`}
-        </p>`).join('')}
-        <p class="t12-field t12-hp" aria-hidden="true">
-          <label for="f-vefur">Vefur</label>
-          <input id="f-vefur" name="vefur" type="text" tabindex="-1" autocomplete="off">
-        </p>
-        <p><button class="t12-btn is-primary" type="submit">${esc(C.CONTACT.submit)}</button></p>
-        <p class="t12-form-msg" role="status" aria-live="polite"></p>
-      </form>
+      <p class="al-rail-hint" aria-hidden="true"><span>${esc(SHOP.drag)}</span></p>
+    </div>
+
+    <div class="al-shop-foot">
+      <a class="al-btn" href="${esc(META.shop)}" target="_blank" rel="noopener">
+        ${esc(SHOP.cta)}<span class="al-btn-a" aria-hidden="true"></span>
+      </a>
+      <p class="al-note">${esc(SHOP.priceNote)}</p>
+    </div>
+    ${waveRule()}
+  </section>
+
+  <section class="al-roll" id="rekkarnir" data-theme="dark" aria-labelledby="al-roll-h" data-roll>
+    <div class="al-roll-spacer" data-roll-spacer>
+      <div class="al-roll-vp">
+        <div class="al-roll-stage" aria-hidden="true">
+          ${ARTISTS.map(plate).join('')}
+          <div class="al-roll-scrim"></div>
+        </div>
+
+        <div class="al-roll-in">
+          <div class="al-roll-left">
+            <p class="al-eye al-eye--dark">${esc(ROSTER.eyebrow)}</p>
+            <h2 class="al-h2 al-h2--dark" id="al-roll-h" data-split>${esc(ROSTER.title)}</h2>
+
+            <p class="al-roll-now" aria-live="polite">
+              <span class="al-roll-now-n" data-roll-num>01</span>
+              <span class="al-roll-now-l">${esc(ROSTER.countLabel)}</span>
+              <span class="al-roll-now-t" data-roll-name>${esc(ARTISTS[0].name)}</span>
+              <span class="al-roll-now-r" data-roll-title>${esc(ARTISTS[0].title)}</span>
+            </p>
+            <canvas class="al-wave al-wave--roll" data-wave="roll" aria-hidden="true"></canvas>
+            <p class="al-roll-note">${esc(ROSTER.note)}</p>
+          </div>
+
+          <div class="al-roll-right">
+            <div class="al-roll-mark" aria-hidden="true"></div>
+            <ol class="al-roll-list" data-roll-list>
+              ${ARTISTS.map(rosterRow).join('')}
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="al-hist" id="sagan" data-theme="light" aria-labelledby="al-hist-h">
+    <div class="al-hist-head">
+      <p class="al-eye">${esc(HISTORY.eyebrow)}</p>
+      <h2 class="al-h2" id="al-hist-h" data-split data-split-rails>${esc(HISTORY.title)}</h2>
+      <p class="al-lead" data-split>${esc(HISTORY.lead)}</p>
+    </div>
+
+    <div class="al-odo" data-odo aria-hidden="true">
+      <div class="al-odo-strip" data-odo-strip>
+        ${HISTORY.items.map((h, i) => `<span class="al-odo-i" data-odo-item ${i === 0 ? 'data-on="1"' : ''}>${esc(h.year)}</span>`).join('')}
+      </div>
+    </div>
+
+    <div class="al-tl" data-tl role="group" aria-label="Tímalína, dragðu til hliðar" tabindex="0">
+      <div class="al-tl-line" aria-hidden="true"><span data-tl-fill></span></div>
+      <div class="al-tl-track" data-tl-track>
+        ${HISTORY.items.map(era).join('')}
+        <div class="al-rail-clone" aria-hidden="true">${HISTORY.items.map(era).join('')}</div>
+      </div>
+      <p class="al-rail-hint" aria-hidden="true"><span>${esc(HISTORY.drag)}</span></p>
+    </div>
+  </section>
+
+  <!-- Structurally Alda's parent-company band; here it is the label, and it carries no
+       artwork at all, so no sleeve can sit beside the word „útgáfan" and imply a signing. -->
+  <section class="al-parent" id="utgafan" data-theme="dark" aria-labelledby="al-parent-h">
+    <p class="al-eye al-eye--dark">${esc(LABEL.eyebrow)}</p>
+    <h2 class="al-parent-h" id="al-parent-h" data-split>${esc(LABEL.title)}</h2>
+    <p class="al-parent-b" data-split>${esc(LABEL.body)}</p>
+    <p class="al-parent-guard">${esc(LABEL.guard)}</p>
+    <a class="al-parent-l" href="${esc(LABEL.link[1])}" target="_blank" rel="noopener">${esc(LABEL.link[0])}</a>
+  </section>
+
+  <section class="al-cta" data-theme="red" aria-labelledby="al-cta-h">
+    <h2 class="al-cta-h" id="al-cta-h" data-split>${esc(CTA.head)}</h2>
+    <p class="al-cta-b">${esc(CTA.body)}</p>
+    <div class="al-cta-row">
+      <a class="al-btn al-btn--ink" href="mailto:${esc(META.email)}?subject=${encodeURIComponent(CTA.subject)}">
+        ${esc(CTA.action)}<span class="al-btn-a" aria-hidden="true"></span>
+      </a>
+      <a class="al-btn al-btn--ghost" href="#footer">${esc(CTA.secondary)}</a>
     </div>
   </section>
 
 </main>
 
-<footer class="t12-foot" data-theme="ink">
-  <div class="t12-wrap">
-    <p class="t12-foot-mark">12 TÓNAR</p>
-    <div class="t12-foot-grid">
-      <p>${esc(C.SHOP.street)}<br>${esc(C.SHOP.postcode)}</p>
-      <p><a href="tel:${esc(C.SHOP.phoneHref)}">${esc(C.SHOP.phone)}</a><br><a href="mailto:${esc(C.SHOP.email)}">${esc(C.SHOP.email)}</a></p>
-      <p>Kt. ${esc(C.SHOP.kt)}</p>
+<footer class="al-ft" id="footer" data-theme="dark">
+  <div class="al-ft-top">
+    <a class="al-ft-logo" href="#top" aria-label="12 Tónar, efst á síðu">
+      ${brandLockup('ft-mark', 'al-lock al-lock--ft')}
+    </a>
+    ${waveRule()}
+  </div>
+
+  <div class="al-ft-cols">
+    <div class="al-ft-col">
+      <h3 class="al-ft-lab">${esc(FOOTER.shopLabel)}</h3>
+      <p class="al-ft-addr">${esc(META.address)}</p>
+      <a class="al-ft-big" href="${esc(META.shop)}" target="_blank" rel="noopener">Netverslun</a>
     </div>
-    <p class="t12-disclose">${esc(C.DISCLOSURE)}</p>
-    <p class="t12-by">Frumgerð: <a href="${esc(C.FOOTER.builtHref)}" target="_blank" rel="noopener">${esc(C.FOOTER.built)}</a></p>
+    <div class="al-ft-col">
+      <h3 class="al-ft-lab">${esc(FOOTER.hoursLabel)}</h3>
+      <dl class="al-ft-hours">
+        ${META.hours.map(([d, t]) => `<div><dt>${esc(d)}</dt><dd>${esc(t)}</dd></div>`).join('')}
+      </dl>
+      <p class="al-ft-hnote">${esc(FOOTER.hoursNote)}</p>
+    </div>
+    <div class="al-ft-col">
+      <h3 class="al-ft-lab">${esc(FOOTER.contactLabel)}</h3>
+      <a class="al-ft-big" href="tel:${esc(META.phoneHref)}">${esc(META.phone)}</a>
+      <a class="al-ft-mail" href="mailto:${esc(META.email)}">${esc(META.email)}</a>
+    </div>
+    <div class="al-ft-col">
+      <h3 class="al-ft-lab">${esc(FOOTER.socialLabel)}</h3>
+      <ul class="al-ft-soc">
+        ${META.social.map(([t, h]) => `<li><a href="${esc(h)}" target="_blank" rel="noopener">${esc(t)}</a></li>`).join('')}
+      </ul>
+    </div>
+  </div>
+
+  <div class="al-ft-base">
+    <p class="al-ft-kt">Kt. ${esc(META.kt)}</p>
+    <p class="al-ft-credit">${esc(FOOTER.credit)}</p>
   </div>
 </footer>
 

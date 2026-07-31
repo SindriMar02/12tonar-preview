@@ -1,162 +1,169 @@
-/* Every fact on this page and where it came from. Nothing is asserted here that was not
-   read off a primary source — their own storefront, their own logo file, their own
-   photographs, a dated news article, or their directory listing. See FACTS.md for the
-   audit trail. Icelandic copy contains no em-dashes by rule. */
+export { ARTISTS, RELEASES } from './roster.mjs';
 
-export const SHOP = {
+/* Every fact here was read off a primary source: their own storefront and logo file,
+   their directory listings, or a dated news article. The audit trail is in FACTS.md.
+   Icelandic copy carries no em-dashes and no en-dashes by rule, so ranges are written
+   with „til" rather than with a stroke. */
+
+export const META = {
   name: '12 Tónar',
+  domain: '12tonar.is',
+  title: '12 Tónar · plötubúð og útgáfa á Skólavörðustíg síðan 1998',
+  description:
+    'Plötubúð, útgáfa og bar á Skólavörðustíg 15 í Reykjavík. Tvær hæðir af plötum, '
+    + 'plötuspilari og espresso í boði hússins. Opnunartími, staðsetning og lagerinn í búðinni.',
+  address: 'Skólavörðustígur 15, 101 Reykjavík',
   kt: '600298-2169',
-  street: 'Skólavörðustígur 15',
-  postcode: '101 Reykjavík',
-  phone: '511 5656',
-  phoneHref: '+3545115656',
   email: '12tonar@12tonar.is',
-  founded: 1998,
-  labelFrom: 2003,
-  maps: 'https://www.google.com/maps/search/?api=1&query=Sk%C3%B3lav%C3%B6r%C3%B0ust%C3%ADgur+15%2C+101+Reykjav%C3%ADk',
+  phone: '+354 511 5656',
+  phoneHref: '+3545115656',
+  shop: 'https://12tonar.myshopify.com/',
+  /* From their 1819 listing. Their own website publishes no opening hours at all,
+     which is the loudest single finding in the audit, so these are shown here AND
+     flagged for the owners to confirm. */
+  hours: [
+    ['Mánudaga til laugardaga', '10 til 18'],
+    ['Sunnudaga', '12 til 18'],
+  ],
+  social: [
+    ['Instagram', 'https://www.instagram.com/12_tonar/'],
+    ['Facebook', 'https://www.facebook.com/12-T%C3%B3nar-28436755255/'],
+  ],
 };
 
-/* Source: their 1819.is listing (1819.is/12-tonar-ehf-verslun). Their own website
-   publishes no opening hours at all, which is the single loudest finding in the audit,
-   so these must be confirmed by the owners before anything goes live. Iceland stays on
-   UTC all year, so the live status can be computed from UTC with no timezone data. */
-export const HOURS = [
-  { d: 'Mánudagur', i: 1, o: 600, c: 1080 },
-  { d: 'Þriðjudagur', i: 2, o: 600, c: 1080 },
-  { d: 'Miðvikudagur', i: 3, o: 600, c: 1080 },
-  { d: 'Fimmtudagur', i: 4, o: 600, c: 1080 },
-  { d: 'Föstudagur', i: 5, o: 600, c: 1080 },
-  { d: 'Laugardagur', i: 6, o: 600, c: 1080 },
-  { d: 'Sunnudagur', i: 0, o: 720, c: 1080 },
-];
-
 export const NAV = [
-  { id: 'rekkarnir', label: 'Rekkarnir' },
-  { id: 'klefinn', label: 'Búðin' },
-  { id: 'utgafan', label: 'Útgáfan' },
-  { id: 'nedri', label: 'Neðri hæðin' },
-  { id: 'hafa-samband', label: 'Hafa samband' },
+  ['Plötur', '#plotur'],
+  ['Í rekkunum', '#rekkarnir'],
+  ['Sagan', '#sagan'],
+  ['Netverslun', META.shop],
 ];
 
 export const HERO = {
-  eyebrow: 'Plötubúð og útgáfa · Skólavörðustígur 15 · frá 1998',
-  mark: '12 TÓNAR',
-  lead: 'Á bak við stafina er hver einasta plata sem er til í búðinni.',
-  cta: [
-    { href: '#rekkarnir', label: 'Farðu í gegnum rekkana', primary: true },
-    { href: '#budin', label: 'Opnunartími og staðsetning' },
+  /* Two lines so the mark can sit as one solid word and one hollow word. Their own
+     sign sets the numeral and the word on a single line, but the two-line lockup is
+     what makes the film readable inside the letters. */
+  markLines: ['12', 'TÓNAR'],
+  eyebrow: 'Skólavörðustígur 15 · síðan 1998',
+  lead:
+    'Plötubúð, útgáfa og bar á Skólavörðustíg. Tvær hæðir af plötum, plötuspilari og '
+    + 'espresso í boði hússins. Þú mátt hlusta á allt áður en þú kaupir.',
+  scroll: 'Skruna',
+  play: 'Hlusta',
+  tickerLabel: 'Nýtt í rekkunum',
+};
+
+export const SHOP = {
+  eyebrow: 'Plötubúðin',
+  title: 'Plötur',
+  lead:
+    'Allt sem hér stendur er til í búðinni á Skólavörðustíg og í netversluninni. '
+    + 'Dragðu röðina til hliðar.',
+  drag: 'Dragðu',
+  cta: 'Opna netverslun',
+  priceNote: 'Verð og lager lesin úr netversluninni 31. júlí 2026.',
+};
+
+export const ROSTER = {
+  eyebrow: 'Lagerinn',
+  title: 'Í rekkunum',
+  lead:
+    'Sextíu flytjendur af þeim hundrað fimmtíu og þremur sem eiga plötu í búðinni '
+    + 'núna. Skrunaðu niður listann.',
+  hint: 'Nafnið í miðjunni er valið',
+  countLabel: 'af 60',
+  /* The accuracy line, carried by the section itself rather than by a caption:
+     these are records the shop SELLS. The label is a separate, smaller roster and it
+     gets its own section further down. */
+  note:
+    'Þetta eru plötur sem búðin selur. Útgáfulisti 12 Tóna er annar listi og hann er '
+    + 'hér fyrir neðan.',
+};
+
+export const HISTORY = {
+  eyebrow: 'Sagan',
+  title: 'Tuttugu og átta ár',
+  lead:
+    'Sama búðin á sama horninu, frá opnun 1998 að lista NME yfir bestu plötubúðir '
+    + 'heims. Dragðu tímalínuna til hliðar.',
+  drag: 'Dragðu tímalínuna',
+  items: [
+    {
+      year: '1998',
+      head: 'Búðin opnar',
+      tag: 'Skólavörðustígur',
+      body:
+        'Búðin opnar á Skólavörðustíg og verður fljótt samkomustaður tónlistarfólks í '
+        + 'Reykjavík. Fólk kemur til að hlusta, ekki bara til að kaupa.',
+    },
+    {
+      year: '2003',
+      head: 'Útgáfan hefst',
+      tag: 'Eigin plötur',
+      body:
+        'Búðin fer að gefa út sjálf. Meðal þeirra sem gefa út hjá 12 Tónum næstu árin '
+        + 'eru Jóhann Jóhannsson, Hildur Guðnadóttir, Ólöf Arnalds, Samaris og Low Roar.',
+    },
+    {
+      year: '2018',
+      head: 'Fyrsta sæti hjá NME',
+      tag: 'Tuttugu ára',
+      body:
+        'Blaðamaðurinn Marcus Barnes setur 12 Tóna í fyrsta sæti á lista NME yfir tíu '
+        + 'bestu plötubúðir heims, sama ár og búðin verður tuttugu ára.',
+    },
+    {
+      year: '2019',
+      head: 'Barinn',
+      tag: 'Og kaffihúsið',
+      body:
+        'Bar og kaffihús bætast við. Búðin verður staður sem fólk situr á, ekki bara '
+        + 'staður sem það kemur í, og bakgarðurinn fyllist á tónleikakvöldum.',
+    },
+    {
+      year: 'Núna',
+      head: 'Tvær hæðir',
+      tag: 'Reykjavík 101',
+      body:
+        'Þrjú hundruð og tuttugu titlar í rekkunum, hundrað fimmtíu og þrír flytjendur, '
+        + 'plötuspilari á staðnum og opið alla daga vikunnar.',
+    },
   ],
 };
 
-/* 1998 opening + label from 2003: 12tonar.is / Wikipedia / finna.is, all agreeing.
-   The 2018 line is deliberately precise. What happened is that Marcus Barnes, writing
-   for NME in October 2018, put 12 Tónar first in his top ten record shops in the world.
-   „Valin besta plötubúð heims" without his name on it is an overclaim, and overclaims
-   are checkable. mbl.is/folk/frettir/2018/10/22 and nutiminn.is both carry it. */
-export const STORY = {
-  tone: '02',
-  kicker: 'Síðan 1998',
-  head: 'Búð sem fólk kemur aftur í',
-  body: [
-    'Búðin opnaði á Skólavörðustíg árið 1998 og varð fljótt samkomustaður tónlistarfólks í Reykjavík. Fimm árum síðar hófst útgáfan.',
-    'Árið 2018 setti blaðamaðurinn Marcus Barnes 12 Tóna í fyrsta sæti á lista NME yfir tíu bestu plötubúðir heims. Ekkert af þessu stendur á vefnum þeirra í dag.',
-  ],
-  marks: [
-    { n: '1998', t: 'Búðin opnar' },
-    { n: '2003', t: 'Útgáfan hefst' },
-    { n: '2018', t: 'Fyrsta sæti hjá NME' },
-    { n: '2', t: 'Hæðir af plötum' },
-  ],
-};
-
-export const CRATE = {
-  tone: '03',
-  kicker: 'Í rekkunum',
-  head: 'Farðu í gegnum rekkana',
-  lead: 'Þetta er lagerinn í búðinni, með verðunum sem standa á honum. Dragðu til hliðar.',
-  note: 'Plötur sem búðin selur. Útgáfulisti 12 Tóna er annar listi og hann er hér fyrir neðan.',
-  hint: 'Dragðu eða strjúktu',
-};
-
-/* Two floors, listening, free espresso: described in their own listings and in the
-   shop's standing description. Nothing here claims a service they do not offer. */
-export const LISTEN = {
-  tone: '04',
-  kicker: 'Sestu niður',
-  head: 'Þú mátt hlusta á allt áður en þú kaupir',
-  body: [
-    'Tvær hæðir af plötum, plötuspilari og espresso í boði hússins. Fólk sest niður, hlustar og fer svo aftur upp í rekkana.',
-    'Þetta er ástæðan fyrir því að búðin er á lista yfir það sem fólk vill sjá í Reykjavík, og það er ekki hægt að lesa það neins staðar á vefnum þeirra.',
-  ],
-  caption: 'Efri hæðin á Skólavörðustíg 15. Ljósmynd frá 12 Tónum.',
-  specs: [
-    ['Hæðir af plötum', 'Tvær'],
-    ['Plötuspilari', 'Á staðnum'],
-    ['Espresso og te', 'Í boði hússins'],
-    ['Opið', 'Alla daga vikunnar'],
-  ],
-};
-
-/* Label artists: Wikipedia's 12 Tónar entry lists Jóhann Jóhannsson, Hildur
-   Guðnadóttir, Ólöf Arnalds, Samaris and Low Roar among the label's releases.
-   NO ARTWORK IN THIS SECTION. A sleeve next to the word „útgáfan" would imply a
+/* Structurally this is where Alda's parent-company band sat. Here it carries the
+   label, and it carries NO ARTWORK: a sleeve beside the word „útgáfan" would imply a
    signing, and most of the sleeves in the shop are other labels' records. */
 export const LABEL = {
-  tone: '05',
-  kicker: 'Útgáfan',
-  head: 'Það sem búðin gefur sjálf út',
-  body: [
-    'Útgáfan hefur starfað frá 2003. Meðal þeirra sem hafa gefið út hjá 12 Tónum eru Jóhann Jóhannsson, Hildur Guðnadóttir, Ólöf Arnalds, Samaris og Low Roar.',
-  ],
-  names: ['Jóhann Jóhannsson', 'Hildur Guðnadóttir', 'Ólöf Arnalds', 'Samaris', 'Low Roar'],
-  guard: 'Þetta er útgáfulistinn. Listinn hér fyrir ofan er lagerinn í búðinni og hann er annað.',
+  eyebrow: 'Útgáfan',
+  title: 'Það sem búðin gefur sjálf út',
+  body:
+    'Útgáfan hefur starfað frá 2003. Meðal þeirra sem hafa gefið út hjá 12 Tónum eru '
+    + 'Jóhann Jóhannsson, Hildur Guðnadóttir, Ólöf Arnalds, Samaris og Low Roar.',
+  guard:
+    'Listinn hér fyrir ofan er lagerinn í búðinni. Þetta er útgáfan og það er annað.',
+  link: ['Netverslunin', META.shop],
 };
 
-export const LOWER = {
-  tone: '06',
-  kicker: 'Neðri hæðin',
-  head: 'Kassarnir sem taka tíma',
-  lead: 'Það sem finnst þegar farið er alla leið í gegnum stæðurnar.',
-  hint: 'Færðu ljósið yfir stæðurnar',
+export const CTA = {
+  head: 'Ertu með eitthvað sem við eigum að heyra?',
+  body:
+    'Sendu okkur hlekk á tónlistina þína, eða komdu bara við. Það er plötuspilari á '
+    + 'staðnum og espresso í boði hússins.',
+  action: 'Senda tónlist',
+  subject: 'Tónlist til 12 Tóna',
+  secondary: 'Koma í búðina',
 };
-
-export const NUMBERS = {
-  tone: '07',
-  kicker: 'Í tölum',
-  head: 'Búðin eins og hún stendur í dag',
-  note: 'Tölurnar eru lesnar beint úr vöruskrá búðarinnar 31. júlí 2026.',
-};
-
-export const SHOPSEC = {
-  tone: '08',
-  kicker: 'Búðin',
-  head: 'Skólavörðustígur 15',
-  body: 'Hvorki heimilisfang, símanúmer né opnunartími stendur nokkurs staðar á vefnum þeirra í dag. Þetta er allt sem gestur þarf.',
-  caption: 'Skólavörðustígur 15 að kvöldi. Ljósmynd frá 12 Tónum.',
-  hoursNote: 'Opnunartími skráður hjá 1819. Staðfestist af eigendum.',
-};
-
-export const CONTACT = {
-  tone: '09',
-  kicker: 'Hafðu samband',
-  head: 'Sendu okkur línu',
-  body: 'Vantar þig plötu sem er ekki í rekkunum, eða viltu senda okkur upptöku? Hringdu, skrifaðu eða komdu við.',
-  fields: [
-    { id: 'nafn', label: 'Nafn', type: 'text', auto: 'name' },
-    { id: 'netfang', label: 'Netfang', type: 'email', auto: 'email' },
-    { id: 'erindi', label: 'Erindið', type: 'textarea', auto: 'off' },
-  ],
-  submit: 'Senda',
-};
-
-/* This is a spec redesign on a URL that is not theirs. It says so, in Icelandic, in the
-   footer, on the page itself, not only in a robots directive. */
-export const DISCLOSURE =
-  'Þetta er sýnishorn af endurhönnun, unnið af SNDR Studio og ekki í eigu 12 Tóna. ' +
-  'Allar plötuumslög, ljósmyndir, verð og merki eru eign 12 tóna ehf. og eru sótt úr ' +
-  'þeirra eigin vefverslun. Síðan er ekki skráð hjá leitarvélum.';
 
 export const FOOTER = {
-  built: 'SNDR Studio',
-  builtHref: 'https://sndr-studio.pages.dev',
+  head: '12 Tónar',
+  shopLabel: 'Plötubúðin',
+  hoursLabel: 'Opnunartími',
+  contactLabel: 'Samband',
+  socialLabel: 'Samfélagsmiðlar',
+  hoursNote: 'Opnunartími skráður hjá 1819. Staðfestist af eigendum.',
+  credit:
+    'Frumgerð eftir SNDR Studio og ekki í eigu 12 Tóna. Plötuumslög, verð og merki eru '
+    + 'eign 12 tóna ehf. og eru sótt úr þeirra eigin vefverslun. Kvikmyndin í hausnum er '
+    + 'tölvugerð. Þetta er ekki opinber vefur fyrirtækisins og hann er ekki skráður hjá '
+    + 'leitarvélum.',
 };
