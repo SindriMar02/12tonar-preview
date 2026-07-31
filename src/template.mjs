@@ -32,11 +32,17 @@ function crateCards() {
       letter = L;
       out += `<li class="t12-div" aria-hidden="true"><span>${esc(L)}</span></li>`;
     }
+    /* The disc sits BEHIND the jacket and is pulled out on hover: two opposed
+       springs, the record sliding and turning while the jacket recoils. Its centre
+       label is the record's own artwork, so the object is self-consistent. */
     out += `<li class="t12-card">
         <figure>
           <div class="t12-sleeve">
-            <img src="${esc(r.file)}" width="${r.ow}" height="${r.oh}" loading="${i < 3 ? 'eager' : 'lazy'}" decoding="async"
-                 alt="Plötuumslag: ${esc(r.artist)}, ${esc(r.title)}">
+            <span class="t12-disc" aria-hidden="true" style="--lbl:url(${esc(r.file)})"></span>
+            <span class="t12-jacket">
+              <img src="${esc(r.file)}" width="${r.ow}" height="${r.oh}" loading="${i < 3 ? 'eager' : 'lazy'}" decoding="async"
+                   alt="Plötuumslag: ${esc(r.artist)}, ${esc(r.title)}">
+            </span>
           </div>
           <figcaption>
             <p class="t12-card-a">${esc(r.artist)}</p>
@@ -147,11 +153,8 @@ export function render({ noindex = false, previewOrigin = '' } = {}) {
   <a class="t12-head-mark" href="#top" aria-label="12 Tónar, efst á síðu">
     <img src="img/logo.webp" width="${CAT.photos.logo.w}" height="${CAT.photos.logo.h}" alt="" decoding="async">
   </a>
-  <p class="t12-head-live" id="t12-live" data-state="">
-    <span class="t12-dot" aria-hidden="true"></span><span id="t12-live-t">${esc(C.SHOP.street)}</span>
-  </p>
   <nav class="t12-head-nav" aria-label="Aðalvalmynd">
-    ${C.NAV.map((n) => `<a href="#${n.id}">${esc(n.label)}</a>`).join('')}
+    ${C.NAV.map((n) => `<a href="#${n.id}"><span class="t12-roll"><span>${esc(n.label)}</span><span aria-hidden="true">${esc(n.label)}</span></span></a>`).join('')}
   </nav>
   <a class="t12-head-tel" href="tel:${esc(C.SHOP.phoneHref)}">${esc(C.SHOP.phone)}</a>
   <button class="t12-burger" type="button" aria-expanded="false" aria-controls="t12-menu">
@@ -260,7 +263,7 @@ export function render({ noindex = false, previewOrigin = '' } = {}) {
       ${head(C.LABEL.head, 't12-h2--big')}
       ${C.LABEL.body.map((p) => `<p class="t12-p t12-p--wide" data-rv>${esc(p)}</p>`).join('')}
       <ul class="t12-names">
-        ${C.LABEL.names.map((n, i) => `<li data-rv style="--i:${i}">${esc(n)}</li>`).join('')}
+        ${C.LABEL.names.map((n, i) => `<li data-rv style="--i:${i}"><span class="t12-roll"><span>${esc(n)}</span><span aria-hidden="true">${esc(n)}</span></span></li>`).join('')}
       </ul>
       <p class="t12-guard" data-rv>${esc(C.LABEL.guard)}</p>
     </div>
@@ -273,7 +276,15 @@ export function render({ noindex = false, previewOrigin = '' } = {}) {
       ${head(C.LOWER.head, 't12-h2--big')}
       <p class="t12-lead" data-rv>${esc(C.LOWER.lead)}</p>
     </div>
-    <ul class="t12-tiles">${tileGrid()}</ul>
+    <!-- The wall sits under a scrim with a hole punched in it by a radial alpha mask
+         that springs after the pointer: the lower floor is dim and you carry the light.
+         One scrim for the whole grid, so no image is ever loaded or decoded twice. -->
+    <div class="t12-torch" data-torch>
+      <ul class="t12-tiles">${tileGrid()}</ul>
+      <div class="t12-torch-scrim" aria-hidden="true"></div>
+      <div class="t12-torch-glow" aria-hidden="true"></div>
+    </div>
+    <p class="t12-wrap t12-hint t12-torch-hint" aria-hidden="true">${esc(C.LOWER.hint)}</p>
   </section>
 
   <!-- 07 ========================================================== in numbers -->
@@ -366,6 +377,7 @@ export function render({ noindex = false, previewOrigin = '' } = {}) {
   </div>
 </footer>
 
+<script src="vendor/lenis.min.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>

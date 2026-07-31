@@ -36,6 +36,33 @@
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0}
 .t12-html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+
+/* Lenis (v1.3.25) requires these; inlined rather than shipping a second stylesheet.
+   `scroll-behavior: smooth` and Lenis fight each other, so the class turns it off. */
+html.lenis,html.lenis body{height:auto}
+html.lenis{scroll-behavior:auto}
+.lenis:not(.lenis-autoToggle).lenis-stopped{overflow:clip}
+.lenis [data-lenis-prevent]{overscroll-behavior:contain}
+.lenis.lenis-smooth iframe{pointer-events:none}
+
+/* One curve for every hover on the page, so the whole thing reads as one hand.
+   Expo-out: leaves instantly, arrives without a bounce. */
+:root{--t12-ease:cubic-bezier(.19,1,.22,1)}
+
+/* ------------------------------------------------------------- the roll-up ---
+   Two copies of the label; the resting one leaves upward as the second arrives
+   from below. The clip box is padded so Í Á Ó Ú Ý are not sheared off, and the
+   second copy is aria-hidden so it is never read twice. */
+.t12-roll{position:relative;display:inline-block;overflow:hidden;vertical-align:top;
+  padding-top:.16em;margin-top:-.16em}
+.t12-roll>span{display:block;transition:transform .46s var(--t12-ease)}
+.t12-roll>span+span{position:absolute;left:0;top:.16em;transform:translateY(105%)}
+@media (hover:hover){
+  :is(a,li):hover>.t12-roll>span:first-child,
+  :is(a,li):focus-visible>.t12-roll>span:first-child{transform:translateY(-105%)}
+  :is(a,li):hover>.t12-roll>span+span,
+  :is(a,li):focus-visible>.t12-roll>span+span{transform:translateY(0)}
+}
 .t12-body{
   background:var(--t12-ground);color:var(--t12-fg);
   font-family:var(--t12-disp);font-weight:400;font-size:clamp(16px,1.05vw,18px);
@@ -99,19 +126,11 @@ main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-ind
 }
 .t12-head-mark{display:block;line-height:0;flex:none}
 .t12-head-mark img{width:clamp(92px,9vw,124px);height:auto;border:1.5px solid currentColor}
-.t12-head-live{grid-column:2;justify-self:start;display:flex;align-items:center;gap:8px;
-  font-family:var(--t12-mono);font-size:11px;font-weight:500;letter-spacing:.04em;
-  text-transform:uppercase;opacity:.9}
-.t12-dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.4;flex:none}
-.t12-head-live[data-state=open] .t12-dot{opacity:1;background:#1D9F55;
-  box-shadow:0 0 0 0 color-mix(in srgb,#1D9F55 60%,transparent);animation:t12pulse 2.6s ease-out infinite}
-.t12-head-live[data-state=closed] .t12-dot{opacity:1;background:currentColor}
-@keyframes t12pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,#1D9F55 55%,transparent)}
-  70%,100%{box-shadow:0 0 0 9px transparent}}
 .t12-head-nav{display:none;gap:clamp(14px,1.7vw,30px);font-weight:500;font-size:14px}
 .t12-head-nav a{text-decoration:none;position:relative;padding:6px 0;white-space:nowrap}
 .t12-head-nav a::after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;
-  background:currentColor;transform:scaleX(0);transform-origin:0 50%;transition:transform .3s ease}
+  background:currentColor;transform:scaleX(0);transform-origin:0 50%;
+  transition:transform .42s var(--t12-ease)}
 .t12-head-nav a:hover::after,.t12-head-nav a:focus-visible::after{transform:scaleX(1)}
 .t12-head-tel{display:none;font-family:var(--t12-mono);font-size:12px;font-weight:700;
   text-decoration:none;border:1.5px solid currentColor;padding:8px 12px}
@@ -122,7 +141,7 @@ main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-ind
 /* This block must sit AFTER the base rules it overrides: at equal specificity the
    cascade is decided by source order, not by the media query being "more specific". */
 @media (min-width:1080px){
-  .t12-head{grid-template-columns:auto auto 1fr auto auto}
+  .t12-head{grid-template-columns:auto 1fr auto auto}
   .t12-head-nav{display:flex;justify-self:end}
   .t12-head-tel{display:inline-block}
   .t12-burger{display:none}
@@ -185,12 +204,18 @@ main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-ind
 .t12-to{display:inline-block;margin:0 .28em;opacity:.5;font-size:.5em;vertical-align:.28em;
   font-family:var(--t12-mono);font-weight:500}
 
-.t12-btn{display:inline-block;text-decoration:none;font-weight:700;font-size:15px;
-  padding:14px 22px;border:2px solid currentColor;
-  transition:background-color .28s ease,color .28s ease,transform .28s ease}
-.t12-btn:hover{transform:translateY(-2px)}
+.t12-btn{position:relative;display:inline-block;text-decoration:none;font-weight:700;
+  font-size:15px;padding:14px 22px;border:2px solid currentColor;overflow:hidden;
+  transition:color .4s var(--t12-ease),transform .4s var(--t12-ease),border-color .4s ease;
+  z-index:0}
+/* The fill wipes up from the baseline, the way a sign gets painted in. */
+.t12-btn::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--t12-fg);
+  transform:translateY(101%);transition:transform .5s var(--t12-ease)}
+.t12-btn:hover,.t12-btn:focus-visible{transform:translateY(-2px);color:var(--t12-ground)}
+.t12-btn:hover::before,.t12-btn:focus-visible::before{transform:translateY(0)}
 .t12-btn.is-primary{background:var(--t12-fg);color:var(--t12-ground)}
-.t12-btn.is-primary:hover{background:var(--t12-live);border-color:var(--t12-live);color:#fff}
+.t12-btn.is-primary::before{background:var(--t12-live);transform:translateY(-101%)}
+.t12-btn.is-primary:hover,.t12-btn.is-primary:focus-visible{border-color:var(--t12-live);color:#fff}
 
 /* --------------------------------------------------------- 01 the sign ------ */
 .t12-hero{min-height:100svh;display:flex;flex-direction:column;justify-content:center;
@@ -265,15 +290,48 @@ main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-ind
 .t12-crate.is-drag *{pointer-events:none}
 .t12-crate-track{display:flex;align-items:flex-end;gap:clamp(14px,1.6vw,26px);
   width:max-content;padding-inline:var(--t12-gut)}
-.t12-card{flex:none;width:clamp(178px,20vw,260px);scroll-snap-align:center}
+.t12-card{flex:none;width:clamp(178px,20vw,260px);scroll-snap-align:center;
+  position:relative;z-index:1}
+.t12-card:hover,.t12-card:focus-within{z-index:3}
 .t12-card figure{display:flex;flex-direction:column;gap:14px}
-.t12-sleeve{aspect-ratio:1;background:color-mix(in srgb,var(--t12-ink) 12%,transparent);
-  display:grid;place-items:center;overflow:hidden;
+.t12-sleeve{aspect-ratio:1;position:relative}
+.t12-jacket{display:block;position:relative;z-index:2;height:100%;
+  background:color-mix(in srgb,var(--t12-ink) 12%,transparent);overflow:hidden;
   box-shadow:0 1px 0 color-mix(in srgb,var(--t12-ink) 30%,transparent);
-  transition:transform .42s cubic-bezier(.2,.7,.2,1),box-shadow .42s ease}
-.t12-sleeve img{width:100%;height:100%;object-fit:contain}
-.t12-card:hover .t12-sleeve{transform:translateY(-8px);
-  box-shadow:0 14px 26px -12px color-mix(in srgb,var(--t12-ink) 55%,transparent)}
+  transition:transform .5s var(--t12-ease),box-shadow .5s ease}
+.t12-jacket img{width:100%;height:100%;object-fit:contain}
+
+/* --------------------------------------------------- the record comes out ----
+   Adopted from 21st.dev's Vinyl Album Card (@saurabh-2607), which is one idea
+   worth having: it is not the disc sliding out that sells it, it is that the
+   JACKET RECOILS on a tighter, faster curve than the record leaves on. Kept the
+   two opposed channels and their relative weights; replaced everything else
+   (framer-motion, the holographic gradients, eleven nested groove divs) with one
+   element whose grooves are a repeating-radial-gradient, so 44 of these cost 44
+   elements rather than 484. Its centre label is the record's OWN artwork.
+   Fine pointers only: on touch there is no hover to reveal it, and a phone
+   should not pay for 44 extra painted circles. */
+.t12-disc{position:absolute;inset:0;z-index:1;border-radius:50%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,.075) 0 1px, rgba(255,255,255,0) 1px 3.5px),
+    conic-gradient(from 200deg at 50% 50%, rgba(255,255,255,.11), rgba(255,255,255,0) 22%,
+      rgba(255,255,255,.06) 48%, rgba(255,255,255,0) 72%, rgba(255,255,255,.11)),
+    radial-gradient(circle at 50% 50%, #15171d 0 49.5%, rgba(0,0,0,0) 49.7%);
+  transition:transform .8s cubic-bezier(.18,.9,.24,1.02)}
+.t12-disc::before{content:'';position:absolute;left:50%;top:50%;width:34%;height:34%;
+  translate:-50% -50%;border-radius:50%;background:var(--lbl) 50%/cover,var(--t12-yellow);
+  box-shadow:0 0 0 1px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.16)}
+.t12-disc::after{content:'';position:absolute;left:50%;top:50%;width:3.4%;height:3.4%;
+  translate:-50% -50%;border-radius:50%;background:var(--t12-ground)}
+@media (hover:hover) and (pointer:fine){
+  .t12-card:hover .t12-disc,.t12-card:focus-within .t12-disc{
+    transform:translateX(43%) rotate(192deg)}
+  .t12-card:hover .t12-jacket,.t12-card:focus-within .t12-jacket{
+    transform:translateX(-7px) rotate(-2.2deg) scale(.984);
+    box-shadow:14px 16px 26px -14px color-mix(in srgb,var(--t12-ink) 60%,transparent)}
+}
+@media (hover:hover) and (pointer:coarse),(hover:none){.t12-disc{display:none}}
 .t12-card-a{font-weight:700;font-size:15px;line-height:1.25;letter-spacing:-.01em}
 .t12-card-t{font-size:13.5px;line-height:1.4;opacity:.78;margin-top:2px;
   display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -316,11 +374,16 @@ main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-ind
 /* --------------------------------------------------------- 05 the label ----- */
 .t12-label{padding:0 0 var(--t12-sec)}
 .t12-names{margin-top:clamp(30px,4.4vw,60px);border-top:1px solid var(--t12-rule)}
-.t12-names li{border-bottom:1px solid var(--t12-rule);
+.t12-names li{position:relative;border-bottom:1px solid var(--t12-rule);
   padding:clamp(12px,1.6vw,22px) 0;font-weight:900;letter-spacing:-.028em;
   font-size:clamp(24px,4.4vw,58px);line-height:1.14;
   transform:translateX(calc((1 - var(--rv,1)) * -22px));
   opacity:calc(.15 + var(--rv,1) * .85)}
+/* A yellow rule draws under the name being read, in the sign's own vocabulary. */
+.t12-names li::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:3px;
+  background:var(--t12-yellow);transform:scaleX(0);transform-origin:0 50%;
+  transition:transform .55s var(--t12-ease)}
+.t12-names li:hover::after{transform:scaleX(1)}
 .t12-guard{font-family:var(--t12-mono);font-size:12px;line-height:1.8;max-width:60ch;
   margin-top:clamp(22px,3vw,38px);padding-left:14px;
   border-left:3px solid color-mix(in srgb,var(--t12-yellow) 70%,transparent)}
@@ -329,6 +392,37 @@ main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-ind
    78 sleeves whose sources are 225-480px, rendered at <=104 CSS px. Nothing on
    this page is ever shown larger than its own pixels.                          */
 .t12-lower{padding:var(--t12-sec) 0}
+
+/* ------------------------------------------------------------- the torch ----
+   Adopted from 21st.dev's Torch Reveal (@rmahammad / Motiq). What was worth
+   taking is the engineering, not the look: a CSS radial ALPHA MASK whose centre
+   and radius are three custom properties, so the loop writes three numbers a
+   frame and never causes layout (their note that SVG luminance masks with
+   gradient content are a silent no-op in Chromium saved a wrong turn); the
+   position SPRINGING after the pointer so the light reads as hand-held rather
+   than parented; the radius breathing on two incommensurate sines; and the idle
+   Lissajous patrol, so somebody who never moves the mouse still sees what the
+   section is. Inverted here: theirs reveals a second layer, this one is a scrim
+   with a hole in it, so the 78 sleeves are loaded and decoded exactly once.
+   The scrim only appears once JS marks it live, so no-JS and reduced-motion
+   visitors get the wall at full brightness rather than a dark rectangle. */
+.t12-torch{position:relative;touch-action:pan-y}
+.t12-torch-scrim,.t12-torch-glow{position:absolute;inset:0;pointer-events:none;opacity:0}
+.t12-torch-scrim{z-index:2;background:color-mix(in srgb,var(--t12-ink) 92%,#000);
+  transition:opacity .5s ease;
+  --t12-mask:radial-gradient(circle calc(var(--tr,0) * 1px)
+    at calc(var(--tx,-600) * 1px) calc(var(--ty,-600) * 1px),
+    transparent 0 34%, rgba(0,0,0,.5) 70%, #000 100%);
+  -webkit-mask-image:var(--t12-mask);mask-image:var(--t12-mask)}
+.t12-torch-glow{z-index:3;mix-blend-mode:screen;transition:opacity .5s ease;
+  background:radial-gradient(circle calc(var(--tr,0) * 1.15px)
+    at calc(var(--tx,-600) * 1px) calc(var(--ty,-600) * 1px),
+    color-mix(in srgb,var(--t12-yellow) 17%,transparent) 0 26%, transparent 74%)}
+.t12-torch[data-live] .t12-torch-scrim{opacity:.9}
+.t12-torch[data-live] .t12-torch-glow{opacity:1}
+.t12-torch-hint{margin-top:clamp(16px,2vw,26px)}
+.t12-torch:not([data-live]) + .t12-torch-hint{display:none}
+
 .t12-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));
   gap:clamp(6px,.8vw,12px);margin:clamp(34px,4.6vw,64px) var(--t12-gut) 0}
 @media (min-width:760px){
@@ -337,8 +431,11 @@ main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-ind
 .t12-tile{position:relative;aspect-ratio:1;background:color-mix(in srgb,var(--t12-ink) 10%,transparent);
   overflow:hidden}
 .t12-tile img{width:100%;height:100%;object-fit:cover;
-  transition:transform .5s cubic-bezier(.2,.7,.2,1),filter .4s ease}
-.t12-tile:hover img,.t12-tile:focus-within img{transform:scale(1.06);filter:saturate(1.15)}
+  transition:transform .6s var(--t12-ease),filter .4s ease}
+.t12-tile::after{content:'';position:absolute;inset:0;z-index:2;pointer-events:none;
+  box-shadow:inset 0 0 0 0 var(--t12-yellow);transition:box-shadow .35s var(--t12-ease)}
+.t12-tile:hover img,.t12-tile:focus-within img{transform:scale(1.07);filter:saturate(1.15)}
+.t12-tile:hover::after{box-shadow:inset 0 0 0 2px var(--t12-yellow)}
 .t12-tile-cap{position:absolute;inset:auto 0 0 0;padding:6px 7px 7px;
   background:linear-gradient(transparent,color-mix(in srgb,var(--t12-ink) 92%,transparent) 46%);
   color:var(--t12-paper);font-family:var(--t12-mono);font-size:8.5px;line-height:1.35;
@@ -447,6 +544,12 @@ main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-ind
 
 @media (prefers-reduced-motion:reduce){
   .t12-html{scroll-behavior:auto}
+  /* A record spinning out of its sleeve and a light sweeping a wall are both
+     motion, so both are simply absent rather than instant. */
+  .t12-disc{display:none}
+  .t12-torch[data-live] .t12-torch-scrim,.t12-torch[data-live] .t12-torch-glow{opacity:0 !important}
+  .t12-roll>span+span{display:none}
+  .t12-roll>span{transform:none !important}
   [data-rv],[data-rv].has-focus{--rv:1 !important;opacity:1 !important;transform:none !important}
   .t12-ln-i{transform:none !important}
   .t12-shop-f img{transform:scale(1.02) !important}
@@ -474,7 +577,7 @@ main>section>*:not(.t12-grid),.t12-foot>*:not(.t12-grid){position:relative;z-ind
    11px label reads as fine print rather than as a label. */
 @media (max-width:759px){
   .t12-eyebrow,.t12-tone,.t12-tone-n,.t12-tone-k,.t12-note,.t12-hint,.t12-guard,
-  .t12-head-live,.t12-hero-foot,.t12-marks span,.t12-numgrid span,.t12-specs dt,
+  .t12-hero-foot,.t12-marks span,.t12-numgrid span,.t12-specs dt,
   .t12-listen-f figcaption,.t12-shop-f figcaption,.t12-field label,.t12-form-msg,
   .t12-foot-grid,.t12-disclose,.t12-by,.t12-card-m,.t12-shop-tel,.t12-menu-foot{font-size:12px}
   .t12-tile-cap{font-size:10px}

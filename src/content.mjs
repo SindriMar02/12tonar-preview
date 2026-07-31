@@ -117,6 +117,7 @@ export const LOWER = {
   kicker: 'Neðri hæðin',
   head: 'Kassarnir sem taka tíma',
   lead: 'Það sem finnst þegar farið er alla leið í gegnum stæðurnar.',
+  hint: 'Færðu ljósið yfir stæðurnar',
 };
 
 export const NUMBERS = {

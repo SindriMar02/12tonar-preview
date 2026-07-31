@@ -113,13 +113,37 @@
     if (shopFig) { geo.shopTop = absTop(shopFig); geo.shopH = shopFig.offsetHeight; }
   }
 
+  /* ------------------------------------------------------------------ Lenis --
+     Smooth scroll on the WHEEL only. `syncTouch` stays off on purpose: damping is
+     what turns discrete wheel notches into motion, but on a finger it is just
+     content refusing to be where you put it, so touch keeps the browser's own
+     1.00x scrolling. Off entirely under reduced motion. */
+  let lenis = null;
+  if (!RM.matches && typeof window.Lenis === 'function') {
+    lenis = new window.Lenis({
+      duration: 1.05,
+      easing: (t) => Math.min(1, 1.001 - 2 ** (-10 * t)), /* expo-out, the page's curve */
+      smoothWheel: true,
+      syncTouch: false,
+      autoRaf: false, /* driven from the one loop below, so it idle-cancels with it */
+      anchors: false,
+    });
+  }
+
   /* ---------------------------------------------------------------- engine -- */
   let running = false;
   let last = 0;
   let theme = '';
   let lastDrift = -1e9;
   let lastPar = -1e9;
+  let wakeUntil = 0;
+  let velRaw = 0;
+  let velCur = 0;
   const TAU = 0.085;
+  const VEL_TAU = 0.12;
+  const VEL_NORM = 2600; /* px/s that counts as a hard flick */
+
+  if (lenis) lenis.on('scroll', (e) => { velRaw = e.velocity || 0; kick(); });
 
   function targets(y) {
     const vh = geo.vh;
@@ -147,10 +171,14 @@
       const d = Math.round(-y * 0.06 * 10) / 10;
       if (Math.abs(d - lastDrift) >= 0.4) { markFill.style.setProperty('--drift', d); lastDrift = d; }
     }
-    /* Decoration only: the shopfront photograph, at 0.055x inside its own frame. */
+    /* Decoration only: the shopfront photograph inside its own frame, plus a
+       WEIGHT term. Position answers "where", velocity answers "how fast you are
+       reading" — the frame hangs a few px behind a hard flick and the existing
+       position damping settles it, which is what gives a photograph mass. */
     if (shopImg) {
       const p = clamp((y + geo.vh - geo.shopTop) / (geo.shopH + geo.vh), 0, 1);
-      const px = Math.round((p - 0.5) * 46 * 10) / 10;
+      const weight = clamp(velCur / VEL_NORM, -1, 1) * 15;
+      const px = Math.round(((p - 0.5) * 46 - weight) * 10) / 10;
       if (Math.abs(px - lastPar) >= 0.4) { shopImg.style.setProperty('--par', px + 'px'); lastPar = px; }
     }
 
@@ -171,6 +199,7 @@
   function frame(t) {
     const dt = last ? Math.min((t - last) / 1000, 0.05) : 0.016;
     last = t;
+    if (lenis) lenis.raf(t);
     const y = scrollY;
     targets(y);
 
@@ -181,14 +210,22 @@
         it.cur += (it.tgt - it.cur) * k;
         if (Math.abs(it.tgt - it.cur) < 0.001) it.cur = it.tgt; /* or it never settles */
       }
+      const kv = 1 - Math.exp(-dt / VEL_TAU);
+      velCur += (velRaw - velCur) * kv;
+      if (Math.abs(velCur) < 1) velCur = 0;
     }
+    velRaw *= 0.86; /* Lenis only reports velocity while it is moving */
     const moving = paint(y, damped);
 
-    if (moving) requestAnimationFrame(frame);
-    else { running = false; last = 0; }
+    /* Lenis owns the scroll position, so the loop has to outlive the channels: it
+       stays alive while Lenis is still easing, and for a moment after any input,
+       because Lenis cannot report a scroll until something calls its raf. */
+    if (moving || (lenis && lenis.isScrolling) || t < wakeUntil) requestAnimationFrame(frame);
+    else { running = false; last = 0; velCur = 0; velRaw = 0; }
   }
 
   function kick() {
+    wakeUntil = performance.now() + 900;
     if (running) return;
     running = true;
     last = 0;
@@ -213,6 +250,26 @@
   addEventListener('resize', relayout, { passive: true });
   addEventListener('orientationchange', relayout);
   RM.addEventListener('change', relayout);
+  /* Wheel and touch have to wake the loop directly: with autoRaf off, Lenis cannot
+     emit a scroll event until something calls its raf, so waiting for `scroll` here
+     would deadlock on the very first notch. */
+  for (const ev of ['wheel', 'touchstart', 'touchmove', 'keydown', 'pointerdown']) {
+    addEventListener(ev, kick, { passive: true });
+  }
+
+  /* In-page anchors go through Lenis, or they would jump while it eases. */
+  if (lenis) {
+    doc.addEventListener('click', (e) => {
+      const a = e.target.closest('a[href^="#"]');
+      if (!a) return;
+      const id = a.getAttribute('href').slice(1);
+      const el = id ? doc.getElementById(id) : null;
+      if (!el) return;
+      e.preventDefault();
+      lenis.scrollTo(el, { offset: -(head ? head.offsetHeight : 0) - 8, duration: 1.15 });
+      history.replaceState(null, '', '#' + id);
+    });
+  }
 
   /* ---------------------------------------------------------- the crate ----
      Native scrolling does all the work. Drag inertia is added on fine pointers
@@ -290,6 +347,87 @@
     });
   }
 
+  /* ----------------------------------------------------------- the torch ----
+     The lower floor sits under a scrim with a hole punched in it by a radial alpha
+     mask. Three custom properties per frame on ONE element, so the loop never
+     causes layout and the 78 sleeves underneath are decoded exactly once.
+
+     Adopted from 21st.dev's Torch Reveal: the light SPRINGS after the pointer
+     rather than being parented to it (which is what makes it read as hand-held),
+     its radius breathes on two incommensurate sines rather than one, and when
+     nobody is pointing at it, it patrols a Lissajous path so a visitor who never
+     moves the mouse still sees what the section is. Fine pointers only, and the
+     loop stops dead when the section is off screen or the tab is hidden. */
+  const torch = doc.querySelector('[data-torch]');
+  if (torch && !RM.matches && matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    const scrim = torch.querySelector('.t12-torch-scrim');
+    const glow = torch.querySelector('.t12-torch-glow');
+    const R = 232;
+    const K = 260; const C = 24; /* spring: hand-held, not parented */
+    let px = -600; let py = -600; let inside = false;
+    let sx = -600; let sy = -600; let vx = 0; let vy = 0;
+    let idle = 0; let t0 = 0; let raf = 0; let onScreen = false;
+    let lx = -1e9; let ly = -1e9; let lr = -1e9;
+
+    /* Semi-implicit Euler with substeps: stable at low or irregular frame rates. */
+    const step = (pos, vel, target, dt) => {
+      const n = dt > 0.012 ? Math.ceil(dt / 0.008) : 1;
+      const h = dt / n;
+      let p = pos; let v = vel;
+      for (let i = 0; i < n; i++) { v += (-K * (p - target) - C * v) * h; p += v * h; }
+      return [p, v];
+    };
+
+    let prev = 0;
+    const tick = (now) => {
+      raf = requestAnimationFrame(tick);
+      if (!t0) t0 = now;
+      let dt = (now - prev) / 1000;
+      prev = now;
+      if (!(dt > 0) || dt > 0.05) dt = 0.016;
+      idle += dt;
+      const w = torch.clientWidth; const h = torch.clientHeight;
+      let gx; let gy;
+      if (inside) { gx = px; gy = py; } else {
+        gx = w * (0.5 + 0.34 * Math.sin(idle * 0.3));
+        gy = h * (0.5 + 0.28 * Math.sin(idle * 0.43 + 0.9));
+      }
+      [sx, vx] = step(sx, vx, gx, dt);
+      [sy, vy] = step(sy, vy, gy, dt);
+      const s = (now - t0) / 1000;
+      const r = R + Math.sin(s * 9) * 5 + Math.sin(s * 23 + 1.3) * 2.5;
+      if (Math.abs(sx - lx) > 0.3) { scrim.style.setProperty('--tx', sx.toFixed(1)); lx = sx; }
+      if (Math.abs(sy - ly) > 0.3) { scrim.style.setProperty('--ty', sy.toFixed(1)); ly = sy; }
+      if (Math.abs(r - lr) > 0.3) { scrim.style.setProperty('--tr', r.toFixed(1)); lr = r; }
+      if (glow) {
+        glow.style.setProperty('--tx', sx.toFixed(1));
+        glow.style.setProperty('--ty', sy.toFixed(1));
+        glow.style.setProperty('--tr', r.toFixed(1));
+      }
+    };
+
+    const start = () => { if (!raf) { prev = performance.now(); raf = requestAnimationFrame(tick); } };
+    const stop = () => { if (raf) { cancelAnimationFrame(raf); raf = 0; } };
+
+    torch.addEventListener('pointermove', (e) => {
+      const b = torch.getBoundingClientRect();
+      px = e.clientX - b.left; py = e.clientY - b.top; inside = true;
+    });
+    torch.addEventListener('pointerleave', () => { inside = false; });
+    torch.addEventListener('pointercancel', () => { inside = false; });
+
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver((es) => {
+        onScreen = es.some((x) => x.isIntersecting);
+        if (onScreen && doc.visibilityState !== 'hidden') start(); else stop();
+      }, { threshold: 0.04 }).observe(torch);
+    } else { onScreen = true; start(); }
+    doc.addEventListener('visibilitychange', () => {
+      if (doc.visibilityState === 'hidden') stop(); else if (onScreen) start();
+    });
+    torch.setAttribute('data-live', '');
+  }
+
   /* ----------------------------------------------------------- the menu ---- */
   const burger = doc.querySelector('.t12-burger');
   const menu = doc.getElementById('t12-menu');
@@ -318,33 +456,13 @@
     matchMedia('(min-width: 1080px)').addEventListener('change', (e) => { if (e.matches && open) set(false); });
   }
 
-  /* ------------------------------------------------------- open right now --
-     Iceland stays on UTC all year, so Reykjavík local time is the UTC clock and
-     no timezone data is needed. Their own site publishes no hours at all, which
-     is what this answers.                                                       */
-  const HOURS = { 0: [720, 1080], 1: [600, 1080], 2: [600, 1080], 3: [600, 1080], 4: [600, 1080], 5: [600, 1080], 6: [600, 1080] };
-  const pad = (n) => String(n).padStart(2, '0');
-  const hhmm = (m) => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
-
-  function liveStatus() {
-    const el = doc.getElementById('t12-live');
-    const t = doc.getElementById('t12-live-t');
-    if (!el || !t) return;
-    const now = new Date();
-    const day = now.getUTCDay();
-    const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
-    const [o, c] = HOURS[day];
-    const isOpen = mins >= o && mins < c;
-    el.dataset.state = isOpen ? 'open' : 'closed';
-    if (isOpen) {
-      t.textContent = `Opið núna til ${hhmm(c)}`;
-    } else {
-      let d = day, hop = 0;
-      if (mins >= c) { d = (d + 1) % 7; hop = 1; }
-      const next = HOURS[d];
-      const names = ['á sunnudag', 'á mánudag', 'á þriðjudag', 'á miðvikudag', 'á fimmtudag', 'á föstudag', 'á laugardag'];
-      t.textContent = hop ? `Lokað · opnar ${names[d]} kl. ${hhmm(next[0])}` : `Lokað · opnar kl. ${hhmm(next[0])}`;
-    }
+  /* -------------------------------------------------------------- today ----
+     The header no longer carries an open/closed pill. What survives is marking
+     TODAY'S row in the opening-hours table, which is the useful half and does not
+     need a header badge to say it. Iceland stays on UTC all year, so Reykjavík
+     local time is the UTC clock and no timezone data is needed. */
+  function markToday() {
+    const day = new Date().getUTCDay();
     doc.querySelectorAll('.t12-hours tr[data-day]').forEach((tr) => {
       tr.toggleAttribute('data-today', Number(tr.dataset.day) === day);
     });
@@ -372,8 +490,8 @@
   }
 
   /* ----------------------------------------------------------------- boot -- */
-  liveStatus();
-  setInterval(liveStatus, 30000);
+  markToday();
+  setInterval(markToday, 300000);
 
   buildSplits();
   measure();
