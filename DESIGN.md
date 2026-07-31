@@ -83,9 +83,9 @@ Type, both from `~/Design fonts/`, subsetted to Latin + the Icelandic set (49 KB
 03 Í rekkunum     the crate                                      [signature interaction]
 04 Sestu niður    the listening floor, free espresso, two floors
 05 Útgáfan        the label since 2003 — TYPE ONLY, no covers    [accuracy device]
-06 Neðri hæðin    78 small sleeves at 104px, honestly small
+06 Neðri hæðin    78 small sleeves at 104px, lit by a torch       [signature interaction]
 07 Í tölum        real catalogue figures
-08 Búðin          shopfront full-bleed, hours, live open status
+08 Búðin          shopfront full-bleed, hours with today marked
 09 Hafðu samband  phone, email, address
 ```
 
@@ -104,8 +104,8 @@ page says exactly that, with his name on it, not „valin besta plötubúð heim
 
 ## 8. Motion
 
-One idle-cancelling rAF engine, zero dependencies. Traps applied from the first line,
-not discovered again:
+One idle-cancelling rAF engine and exactly one vendored dependency, **Lenis 1.3.25**
+(self-hosted, no CDN). Traps applied from the first line, not discovered again:
 
 1. **No custom property is ever written to the root element.** An unregistered custom
    property inherits, so a per-frame write on `<html>` dirties the whole document. Every
@@ -117,7 +117,7 @@ not discovered again:
    both decoration, both nothing you are reading.
 5. **No damping on touch.** Damping is what turns discrete wheel notches into motion; on
    a finger it is just content refusing to be where you put it. `pointer: coarse` writes
-   targets directly.
+   targets directly, and Lenis runs with `syncTouch: false` for the same reason.
 6. Infinite animations pause off-screen with `animation-play-state: paused !important`
    (the `animation:` shorthand re-sets play-state, so `!important` is required).
 7. No `content-visibility` / `display:none` on anything that crossfades.
@@ -143,3 +143,53 @@ The mechanism differs too: Alda needed canvas because `background-clip:text` can
 a `<video>` and `mix-blend-mode` over a composited video is ignored on WebKit. The fill
 here is a **still image**, so CSS does it — one style write on one element, no canvas, no
 retained bitmaps, and none of Alda's 280 MB mobile memory problem.
+
+### Lenis, and why it is driven by hand
+
+`autoRaf: false`. Lenis is stepped from the page's own loop, so the two cannot both hold
+a `requestAnimationFrame` open and the whole thing still idle-cancels when nothing is
+happening. The loop stays alive while `lenis.isScrolling`, and for 900 ms after any
+input, because with `autoRaf` off Lenis cannot emit a `scroll` event until something
+calls its `raf` — waiting on `scroll` alone deadlocks on the very first wheel notch.
+Wheel, touch, key and pointer events all wake it directly.
+
+Its velocity feeds one damped channel (`tau .12`, normalised at 2600 px/s) which adds a
+weight term to the shopfront photograph: position answers *where*, velocity answers *how
+fast you are reading*.
+
+## 10. The hover vocabulary, and what came from 21st.dev
+
+One curve for everything: `cubic-bezier(.19, 1, .22, 1)`. Three components were pulled
+as real code, kept for their logic, and re-skinned completely.
+
+**The record leaves its sleeve** — from `Great UI Vinyl Album Card` (@saurabh-2607).
+The idea worth having is not that the disc slides out, it is that the **jacket recoils on
+a tighter, faster curve than the record leaves on**: disc `translateX(43%) rotate(192deg)`
+over .8s with a slight overshoot, jacket `translateX(-7px) rotate(-2.2deg) scale(.984)`
+over .5s. Kept both channels and their relative weights. Dropped framer-motion, the
+holographic gradients, and the eleven nested divs it used for grooves — one element with
+a `repeating-radial-gradient` does it, so 44 cards cost 44 elements rather than 484. Each
+disc's centre label is that record's own artwork, so the object is self-consistent.
+
+**The torch** — from `Torch Reveal` (@rmahammad / Motiq). A CSS radial **alpha mask**
+whose centre and radius are three custom properties, so the loop writes three numbers a
+frame and never causes layout (its note that SVG luminance masks with gradient content
+are a silent no-op in Chromium saved a wrong turn). The light **springs** after the
+pointer rather than being parented to it, which is what makes it read as hand-held; the
+radius breathes on **two incommensurate sines** (9 Hz and 23 Hz) so it never pulses; and
+when nobody is pointing at it, it patrols a **Lissajous path**, so a visitor who never
+moves the mouse still sees what the section is. Inverted here: theirs reveals a second
+layer, this is a scrim with a hole in it, so the 78 sleeves are decoded exactly once.
+The loop stops dead when the section is off screen or the tab is hidden.
+
+**The roll-up** — from `Great UI Animated Link` (@saurabh-2607), its `textRise` variant.
+Two copies of the label, one leaving upward as the other arrives; the clip box is padded
+`.16em` so Í Á Ó Ú Ý survive, and the second copy is `aria-hidden` so nothing is read
+twice. On the nav and on the label roster.
+
+All three are `(hover: hover) and (pointer: fine)` only, and **absent** under reduced
+motion rather than frozen: a record spinning out of a sleeve and a light sweeping a wall
+are motion, so they simply do not exist there. `qa/motion.mjs` asserts every one of those
+statements, including that Lenis passes through 13 distinct positions on one wheel notch
+and that the torch stops when scrolled away.
+

@@ -25,7 +25,8 @@ Every claim on the page and its source: [`FACTS.md`](FACTS.md).
 
 ## Build
 
-No dependencies, no bundler, no framework. Vanilla HTML/CSS/JS emitted by a Node script.
+No bundler, no framework, one vendored dependency (Lenis 1.3.25, self-hosted).
+Vanilla HTML/CSS/JS emitted by a Node script.
 
 ```bash
 python3 tools/fetch.py     # re-download the 345 sleeves (not committed, ~25 MB)
@@ -42,16 +43,19 @@ rendered DOM.
 ## QA
 
 ```bash
-node qa/qa.mjs      # 24 assertions: a11y, contrast, overflow, scrub reversibility,
+node qa/qa.mjs      # 25 assertions: a11y, contrast, overflow, scrub reversibility,
                     # the crate's 1.00x scroll ratio, no-JS render, reduced motion
+node qa/motion.mjs  # 16 assertions: Lenis really eases, the record leaves its sleeve,
+                    # the torch patrols then stops off screen, reduced motion kills it
 node qa/walk.mjs    # viewport-by-viewport screenshots (a full-page shot is useless
                     # on a page built from scrubbed, reversible reveals)
 node qa/perf.mjs    # frame budget: p95 and >32ms frame count, never the median
 node qa/weight.mjs  # bytes and load timings
 ```
 
-Current: **24/24 passing**. 60 fps with p95 19 ms and zero long tasks on a 390×844 @3×
-profile at CPU ×4. 304 KB to first paint, 975 KB for the whole 9,725 px page.
+Current: **25/25 + 16/16 passing on the live URL**. 60 fps with p95 18 ms and zero long
+tasks on a 390×844 @3× profile at CPU ×4. 344 KB to first paint, 1,014 KB for the whole
+9,734 px page.
 
 ## Deploy
 
