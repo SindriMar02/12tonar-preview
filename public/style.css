@@ -1431,3 +1431,10 @@ body.al-loading { overflow: hidden; }
 /* font-size, not scaleX: squashing the glyphs horizontally distorts the letterforms,
    and at the floor this reaches that is very visible on a condensed face. */
 .al-name-t[style*='--fit'] { font-size: calc(1em * var(--fit)); }
+
+/* The roll's name column translates as a single unit, so promoting it means moving it
+   is a compositor operation instead of a repaint of sixty large text-shadowed rows.
+   This is the case `will-change` exists for: one element that is definitely going to
+   be transformed. It is NOT the case Alda measured out, which was promoting sixty
+   separate full-bleed plates and paying for sixty backing stores. */
+.al-roll-list { will-change: transform; }

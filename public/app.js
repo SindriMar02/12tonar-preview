@@ -606,6 +606,7 @@
         if (img.loading === 'lazy') { img.loading = 'eager'; img.decode?.().catch(() => {}); }
         const p = plates[k];
         if (p.dataset.bg) p.style.setProperty('--al-bg', p.dataset.bg);
+        p.style.visibility = '';
         held.add(k);
       }
       /* and give back everything outside it, walking only what is actually held */
@@ -616,6 +617,18 @@
         img.removeAttribute('src');
         const p = plates[k];
         if (p.dataset.bg) p.style.setProperty('--al-bg', 'none');
+        /* Sixty full-viewport absolutely-positioned plates cost real frames just by
+           EXISTING, even at opacity 0 and even with their images stripped: measured at
+           8fps against 26 with a single plate in the DOM. Alda ruled out both
+           `will-change` (60 permanent backing stores) and `content-visibility` (14,000
+           add/remove-from-layout records per fling, and it DOUBLED layout time), and
+           both of those judgements stand. `visibility` is neither: it skips painting
+           without adding or removing anything from layout, so toggling it is cheap.
+           It is keyed to the WARM WINDOW rather than to `data-on`, which is what makes
+           it safe — a plate becomes paintable several artists before it ever starts to
+           crossfade, so the trap of hiding an element that is mid-transition cannot
+           arise. */
+        p.style.visibility = 'hidden';
         held.delete(k);
       }
     }
@@ -659,8 +672,17 @@
        Icelandic characters are in the noise pool, or the decode reads as English. */
     const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÐÉÍÓÚÝÞÆÖ0123456789';
     let scRaf = 0;
+    let lastSel = 0;
     function scramble(el, text) {
-      if (reduce.matches) { el.textContent = text; return; }
+      const now = performance.now();
+      const fast = now - lastSel < 140;
+      lastSel = now;
+      /* During a fling the artist changes about once a frame, and each change restarts a
+         460ms loop that rewrites this node's text EVERY frame. Nobody can read a decode
+         that is replaced 60 times a second, so while the roll is moving fast the name is
+         simply set. The effect returns the moment the reader slows down, which is the
+         only time it was ever legible. */
+      if (reduce.matches || fast) { cancelAnimationFrame(scRaf); el.textContent = text; return; }
       cancelAnimationFrame(scRaf);
       const chars = [...text];
       const t0 = performance.now();
@@ -742,6 +764,13 @@
     });
 
     measure();
+    /* Everything starts unpainted except the opening window: without this, all sixty
+       plates are paintable until each has been warmed once and then released, so the
+       first pass down the roll pays the full cost exactly once. warm() takes over from
+       here. */
+    for (let k = 0; k < plates.length; k++) {
+      if (k > warmSpan + 1) plates[k].style.visibility = 'hidden';
+    }
     select(0);
     poke();
     addEventListener('resize', measure, { passive: true });
