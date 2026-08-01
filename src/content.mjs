@@ -103,7 +103,7 @@ export const HISTORY = {
       tag: 'Eigin plötur',
       body:
         'Búðin fer að gefa út sjálf. Meðal þeirra sem gefa út hjá 12 Tónum næstu árin '
-        + 'eru Jóhann Jóhannsson, Hildur Guðnadóttir, Ólöf Arnalds, Samaris og Low Roar.',
+        + 'eru Mugison, Jóhann Jóhannsson, Hildur Guðnadóttir, Ólöf Arnalds og Samaris.',
     },
     {
       year: '2018',
@@ -126,8 +126,8 @@ export const HISTORY = {
       head: 'Tvær hæðir',
       tag: 'Reykjavík 101',
       body:
-        'Þrjú hundruð og tuttugu titlar í rekkunum, hundrað fimmtíu og þrír flytjendur, '
-        + 'plötuspilari á staðnum og opið alla daga vikunnar.',
+        'Efri hæðin er djass og klassík, kjallarinn nýbylgja, indie og raftónlist. Þrjú '
+        + 'hundruð og tuttugu titlar í rekkunum og opið alla daga vikunnar.',
     },
   ],
 };
@@ -139,8 +139,9 @@ export const LABEL = {
   eyebrow: 'Útgáfan',
   title: 'Það sem búðin gefur sjálf út',
   body:
-    'Útgáfan hefur starfað frá 2003. Meðal þeirra sem hafa gefið út hjá 12 Tónum eru '
-    + 'Jóhann Jóhannsson, Hildur Guðnadóttir, Ólöf Arnalds, Samaris og Low Roar.',
+    'Útgáfan hefur starfað frá 2003 og nærri áttatíu titlar hafa komið út. Meðal þeirra '
+    + 'sem hafa gefið út hjá 12 Tónum eru Mugison, Jóhann Jóhannsson, Hildur Guðnadóttir, '
+    + 'Skúli Sverrisson, Ólöf Arnalds, Eivör og Samaris.',
   guard:
     'Listinn hér fyrir ofan er lagerinn í búðinni. Þetta er útgáfan og það er annað.',
   link: ['Netverslunin', META.shop],

@@ -197,7 +197,12 @@ ${noindex ? '<meta name="robots" content="noindex, nofollow">\n<meta name="googl
 
       <p class="al-hero-eye">${esc(HERO.eyebrow)}</p>
 
-      <canvas class="al-lattice" data-lattice aria-hidden="true"></canvas>
+      <!-- Alda's hero carried a "mechanical waves through a membrane" lattice here.
+           It is gone. Its concept was the word ALDA, which means wave; on a record shop
+           it is decoration with nothing behind it, and it was measurably the entire
+           reason this hero stuttered: removing it took the section from 11 fps with 38
+           long tasks to 24 fps with ZERO. The record film behind the letters is this
+           page's texture. -->
 
       <!-- The name is a window: the film plays INSIDE the letters and nowhere else.
            Canvas rather than mix-blend-mode, because a blend over a hardware composited

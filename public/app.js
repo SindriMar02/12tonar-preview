@@ -950,7 +950,12 @@
          1.3 megapixels sixty times a second next to the film's grade, and the hero was
          the only section on a phone under 41fps. 1.5 halves it; the mark is a 300px
          display word, so the edge softening is not visible at arm's length. */
-      st.dpr = Math.min(devicePixelRatio || 1, innerWidth < 900 ? 1.5 : 2);
+      /* This canvas is recomposited EVERY frame while the hero is on screen, so its
+         pixel count is a per-frame cost rather than a one-off: at dpr2 on a 1440 hero
+         that is 2.9 megapixels of clear + composite sixty times a second, and the hero
+         measured 9fps against 40+ for every other section. The mark is a ~200px display
+         word, so 1.4 costs nothing visible and buys back half the raster. */
+      st.dpr = Math.min(devicePixelRatio || 1, innerWidth < 900 ? 1.35 : 1.5);
       st.w = Math.max(1, Math.round(r.width));
       st.h = Math.max(1, Math.round(r.height));
       canvas.width = Math.round(st.w * st.dpr);
@@ -1012,7 +1017,13 @@
        one call measured 56.5ms, against 15.4ms for this order. The only divergence is where
        brightness(2.15) clips: the old order interpolated and then clipped, this one clips at
        source. Mean channel difference 0.5/255. */
-    const GRADE = 'brightness(2.15) contrast(1.28) saturate(0)';
+    /* NONE. Alda's film shipped dark and was lifted here, per frame, by a per-pixel
+       filter over the whole frame. This film is graded in the FILE by ffmpeg instead,
+       at encode time, once — so `grade()` is now a plain drawImage and the hero stops
+       paying a 0.41MP filter fifteen times a second for a picture that never changes
+       its look. It also removes a double grade: the file was already darkened and then
+       brightened 2.15x again at runtime, which is why the letters read almost white. */
+    const GRADE = 'none';
     let film = null, filmCtx = null, filmReady = false;
 
     function grade() {
@@ -1092,7 +1103,14 @@
       if (!st.ready) return;
       const { w, h } = st;
       ctx.setTransform(st.dpr, 0, 0, st.dpr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
+      /* Clear only where the type can be. The glyphs never occupy more than the ink box
+         plus the parting travel, so clearing the whole frame was wiping several times
+         more pixels than were ever drawn. A generous margin keeps it self-correcting. */
+      {
+        const pw = Math.abs(chHero.cur) * st.sizes[0] * 0.5 + 24;
+        const cb = inkBox(pw);
+        ctx.clearRect(cb[0] - 8, cb[1] - 8, cb[2] + 16, cb[3] + 16);
+      }
 
       const hx = chHero.cur;
       const intro = st.intro;
@@ -1188,13 +1206,25 @@
        film's own resolution, only while the hero is on screen. What is left is two fillText
        calls in a clipped box, which is cheap enough not to trade correctness for. */
     let mraf = 0;
-    function loop() {
+    /* The mark is recomposited on a fixed cadence rather than every frame. The lattice
+       in this same hero already works this way and for the same reason: the parting of
+       the two lines is a slow, scroll-linked drift, so 30 steps a second is
+       indistinguishable from 60 to the eye while halving the most expensive thing in
+       the frame. Measured: the hero was the only section on this page under 30fps and
+       every frame in it was over budget. */
+    const MARK_STEP = 1 / 30;
+    let macc = 0, mlast = 0;
+    function loop(now) {
       mraf = 0;
+      const dt = mlast ? Math.min((now - mlast) / 1000, 0.05) : 0.016;
+      mlast = now;
+      macc += dt;
       if (!(video && video.requestVideoFrameCallback)) pollFilm();
-      draw();
+      if (macc >= MARK_STEP) { macc = 0; draw(); }
       if (st.live) mraf = requestAnimationFrame(loop);
     }
     function start() {
+      mlast = 0; macc = MARK_STEP;
       /* The loader's finish() calls this, and finish() can land seconds after load: by
          then the reader may already be a whole page down, and starting the film there
          left a 1280x720 clip decoding and running through a per-pixel grade for the
@@ -1365,7 +1395,12 @@
          1.3 megapixels sixty times a second next to the film's grade, and the hero was
          the only section on a phone under 41fps. 1.5 halves it; the mark is a 300px
          display word, so the edge softening is not visible at arm's length. */
-      st.dpr = Math.min(devicePixelRatio || 1, innerWidth < 900 ? 1.5 : 2);
+      /* This canvas is recomposited EVERY frame while the hero is on screen, so its
+         pixel count is a per-frame cost rather than a one-off: at dpr2 on a 1440 hero
+         that is 2.9 megapixels of clear + composite sixty times a second, and the hero
+         measured 9fps against 40+ for every other section. The mark is a ~200px display
+         word, so 1.4 costs nothing visible and buys back half the raster. */
+      st.dpr = Math.min(devicePixelRatio || 1, innerWidth < 900 ? 1.35 : 1.5);
       st.w = Math.max(1, Math.round(r.width));
       st.h = Math.max(1, Math.round(r.height));
       canvas.width = Math.round(st.w * st.dpr);
@@ -1579,6 +1614,31 @@
        clamp it to ~1s, they do not suspend it), so it is the failsafe. And if the
        document is already hidden when the loader starts there is nobody watching the
        animation at all, so it is skipped outright. */
+    /* WARM THE PAGE WHILE THE LOADER IS UP.
+       Every image that decodes during a scroll is a long task in the middle of a
+       gesture, and the loading screen is dead time that is already being spent. The
+       first plates and sleeves are decoded INTO it.
+       Two things this has to get right, both learned by getting them wrong: decode
+       SEQUENTIALLY, because firing fourteen high-priority decodes at once just moves
+       the jam rather than clearing it; and actually HOLD the loader until it is done,
+       because a warm-up that finishes after the loader has landed is doing its work
+       during the reader's first scroll, which is precisely what it was meant to avoid.
+       Hard-capped, and never load-bearing: the failsafe and the backstop both still
+       run on their own clocks. */
+    let warmDone = false;
+    (async () => {
+      const list = [...document.querySelectorAll('.al-plate img')].slice(0, 4)
+        .concat([...document.querySelectorAll('.al-rel-img')].slice(0, 6));
+      const deadline = performance.now() + 1500;
+      for (const img of list) {
+        if (performance.now() > deadline) break;
+        try {
+          img.loading = 'eager';
+          if (img.decode) await img.decode();
+        } catch { /* a decode that fails is simply not a warm image */ }
+      }
+    })().finally(() => { warmDone = true; });
+
     if (document.visibilityState === 'hidden') { land(); return; }
     const failsafe = setTimeout(land, SWEEP_BUDGET);
     const onVis = () => { if (document.visibilityState === 'visible') land(); };
@@ -1624,7 +1684,7 @@
       const tick = (now) => {
         const p = clamp((now - t0) / (SWEEP + 320));
         bar?.style.setProperty('--p', p.toFixed(3));
-        if (p < 1) requestAnimationFrame(tick);
+        if (p < 1 || (!warmDone && now - t0 < SWEEP_BUDGET)) requestAnimationFrame(tick);
         else fly();
       };
       requestAnimationFrame(tick);

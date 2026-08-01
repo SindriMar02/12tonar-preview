@@ -13,7 +13,10 @@ If a line here turns out to be wrong, the copy in `src/content.mjs` changes, not
 | „plötuspilari og espresso í boði hússins" | same | described as free espresso or tea, listening on two floors |
 | „Þú mátt hlusta á allt áður en þú kaupir" | same | |
 | „Opið alla daga vikunnar" | 1819.is listing | see the hours caveat below |
-| label artists: Jóhann Jóhannsson, Hildur Guðnadóttir, Ólöf Arnalds, Samaris, Low Roar | Wikipedia's 12 Tónar entry, label section | **section 05 carries no artwork at all**, so no sleeve can sit beside the word „útgáfan" and imply a signing |
+| label artists: Mugison, Jóhann Jóhannsson, Hildur Guðnadóttir, Skúli Sverrisson, Ólöf Arnalds, Eivör, Samaris | the label’s documented release list, re-checked 2026-08-01 | section 05 carries no artwork at all, so no sleeve can sit beside the word utgafan and imply a signing |
+| nearly eighty releases on the label | same source | |
+| upstairs is jazz and classical, the basement alternative, indie and electronic | the shop’s own standing description | |
+| concerts in the shop and in the backyard | same | |
 | every sleeve, artist, title, format and price in the crate and on the lower floor | their own `products.json`, harvested 2026-07-31 | caption and file are emitted from the same record by `tools/assets.py`, so a title can never drift onto the wrong picture |
 | 297 plötur á vínyl · 25 geisladiskar · 153 flytjendur · 311 titlar til á lager · miðverð 5.000 kr · verðbil 2.500 til 9.000 | computed from the same export | the page says so: „lesnar beint úr vöruskrá búðarinnar 31. júlí 2026" |
 | „322 titlar í búðinni" (hero) | 297 vinyl + 25 CD | excludes their 21 own-brand t-shirts and tote bags |
@@ -75,3 +78,24 @@ and all three loosened a constraint rather than tightening it:
 **The album-image constraint in the brief was exactly right** and is unchanged: only 29
 of 345 covers are ≥1000px and 138 are 225×225. That is what the whole resolution law in
 `DESIGN.md` is built around.
+
+## Corrections from the fact-check pass, 2026-08-01
+
+**LOW ROAR WAS WRONG AND IS GONE.** An earlier draft named Low Roar among the label’s
+artists. It is not on the label’s documented release list, which reads: Mugison,
+Trabant, Singapore Sling, Apparat Organ Quartet, Petur Ben, Eivor Palsdottir,
+Ragnheidur Grondal, Johann Johannsson, Hildur Gudnadottir, Skuli Sverrisson, Olof
+Arnalds, Pink Street Boys, Samaris and Jakobinarina, across nearly 80 releases. Four of
+the five names originally used were right; that one was not, and it is exactly the sort
+of claim the owners would catch in the first thirty seconds of a meeting.
+
+**Bjork, Sigur Ros and mum are NOT named anywhere on this page**, and that is
+deliberate. They are documented as musicians who used the shop as a meeting point, and
+several third-party write-ups blur that into "the shop is also a label for Bjork and
+Sigur Ros". It is not. That is the same distinction section 05 exists to hold: what is
+in the racks versus what the label put out.
+
+**Their own contact page was re-read on 2026-08-01** and is still a bare form: name,
+email, phone number, comment. No address, no telephone number, no opening hours and no
+email address anywhere on it. Every practical detail this prototype shows is one their
+live site does not currently publish.

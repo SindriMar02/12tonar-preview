@@ -113,7 +113,10 @@ def main():
     roll_pool.sort(key=lambda r: -min(r['w'], r['h']))
     roll = sorted(roll_pool[:ROLL_COUNT], key=lambda r: is_key(r['artist']))
     for r in roll:
-        r['ow'], r['oh'] = webp(r['src'], os.path.join(OUT_ROLL, r['slug'] + '.webp'), 1800, 80)
+        # 1440, not 1800. A full-bleed plate covers at most a 1440 viewport here, and an
+        # 1800px WebP was the 177ms decode that showed up as a long task mid-roll. The
+        # archive plates are smaller than this anyway.
+        r['ow'], r['oh'] = webp(r['src'], os.path.join(OUT_ROLL, r['slug'] + '.webp'), 1440, 80)
         # A separate 40px WASH for the archive plates' backdrop. Alda's archive plate
         # paints its photograph twice: once as the contained <img> and once as a
         # blur(38px) background behind it. Alda had six of them; this build has 47,
