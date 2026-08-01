@@ -587,13 +587,24 @@
       const img = plateImg[k];
       if (img) {
         img.dataset.src = img.getAttribute('src') || '';
+        /* AND the srcset. This windowing was written when a plate carried one `src`;
+           adding a responsive `srcset` for phones quietly defeated all of it, because
+           removing `src` leaves the srcset behind and the browser fetches from that
+           instead. Every plate in the roll was being downloaded before the reader had
+           scrolled at all: 2.9MB across 63 requests on a page whose first screen needs
+           three of them. Stash all three and restore them together. */
+        img.dataset.srcset = img.getAttribute('srcset') || '';
+        img.dataset.sizes = img.getAttribute('sizes') || '';
+        if (k > warmSpan + 1) { img.removeAttribute('srcset'); img.removeAttribute('sizes'); }
         if (img.getAttribute('src')) held.add(k);
       }
       /* an archive plate paints the SAME photo twice: once contained as the <img>, and once
          behind it as the out-of-focus wash on ::before. Releasing only the <img> would leave
          half the roll's bitmap retained through the custom property. */
-      const bg = p.style.getPropertyValue('--al-bg');
-      if (bg) p.dataset.bg = bg;
+      /* Same story for the wash: it is a CSS background, and a CSS background is never
+         lazy. Emitted inline by the template, all 47 of them fetched on load. */
+      const bg = p.dataset.bg || p.style.getPropertyValue('--al-bg');
+      if (bg) { p.dataset.bg = bg; if (k > warmSpan + 1) p.style.setProperty('--al-bg', 'none'); }
     });
 
     function warm(i) {
@@ -602,6 +613,8 @@
       for (let k = lo; k <= hi; k++) {
         if (held.has(k)) continue;
         const img = plateImg[k]; if (!img) continue;
+        if (img.dataset.srcset) img.setAttribute('srcset', img.dataset.srcset);
+        if (img.dataset.sizes) img.setAttribute('sizes', img.dataset.sizes);
         if (img.dataset.src) img.setAttribute('src', img.dataset.src);
         if (img.loading === 'lazy') { img.loading = 'eager'; img.decode?.().catch(() => {}); }
         const p = plates[k];
@@ -615,6 +628,8 @@
         if (k === cur) continue;              /* never drop the plate on screen */
         const img = plateImg[k]; if (!img) continue;
         img.removeAttribute('src');
+        img.removeAttribute('srcset');
+        img.removeAttribute('sizes');
         const p = plates[k];
         if (p.dataset.bg) p.style.setProperty('--al-bg', 'none');
         /* Sixty full-viewport absolutely-positioned plates cost real frames just by

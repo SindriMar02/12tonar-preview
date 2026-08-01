@@ -71,7 +71,7 @@ const plate = (a, i) => {
   const archive = !a.full;
   return `
 <figure class="al-plate" data-plate="${i}" ${i === 0 ? 'data-on="1"' : ''}${archive ? ' data-archive="1"' : ''}
-        ${archive ? `style="--al-bg:url('img/artists/${esc(a.slug)}-w.webp')"` : ''}>
+        ${archive ? `data-bg="url('img/artists/${esc(a.slug)}-w.webp')"` : ''}>
   <img src="img/artists/${esc(a.slug)}.webp"
        srcset="img/artists/${esc(a.slug)}-m.webp ${a.mw}w, img/artists/${esc(a.slug)}.webp ${a.w}w"
        sizes="(max-width: 900px) 100vw, ${archive ? '52vw' : '100vw'}"

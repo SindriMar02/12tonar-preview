@@ -81,7 +81,17 @@ const out = await page.evaluate(() => {
     return b.width && i.naturalWidth ? +((b.width * devicePixelRatio) / i.naturalWidth).toFixed(2) : 0;
   }).filter(Boolean).sort((a, b) => b - a).slice(0, 5);
 
-  res.imgs = { total: document.images.length, broken: [...document.images].filter((i) => i.complete && i.naturalWidth === 0).map((i) => i.currentSrc.split('/').pop()) };
+  /* An image the roll has deliberately NOT asked to load is not a broken image. The
+     plate window strips src/srcset from everything outside it, so `naturalWidth === 0`
+     is the expected state for most of the sixty plates at any moment; only an image
+     that was actually asked for and failed counts. */
+  res.imgs = {
+    total: document.images.length,
+    deferred: [...document.images].filter((i) => !i.getAttribute('src') && !i.getAttribute('srcset')).length,
+    broken: [...document.images]
+      .filter((i) => (i.getAttribute('src') || i.getAttribute('srcset')) && i.complete && i.naturalWidth === 0)
+      .map((i) => i.currentSrc.split('/').pop()),
+  };
   return res;
 });
 
